@@ -1,4 +1,5 @@
 import { ProjectRepository, Project } from '../repositories/ProjectRepository';
+import { CodeGenerationService, CodeGenerationRequest, GeneratedFile } from './CodeGenerationService';
 
 export interface CreateProjectRequest {
   name: string;
@@ -23,13 +24,17 @@ export interface CompileProjectResponse {
   message: string;
   outputPath?: string;
   logs?: string[];
+  generatedCode?: string;
+  files?: GeneratedFile[];
 }
 
 export class ProjectService {
   private projectRepo: ProjectRepository;
+  private codeGenerationService: CodeGenerationService;
 
-  constructor(projectRepo: ProjectRepository) {
+  constructor(projectRepo: ProjectRepository, codeGenerationService: CodeGenerationService) {
     this.projectRepo = projectRepo;
+    this.codeGenerationService = codeGenerationService;
   }
 
   async getAllProjects(): Promise<Project[]> {
@@ -80,13 +85,32 @@ export class ProjectService {
       // Update project status to compiling
       await this.projectRepo.update(request.projectId, { status: 'compiling' });
 
-      // Simulate compilation process
-      const logs = [
-        '🚀 Iniciando compilação do projeto...',
-        `📦 Configurando ${project.type} com ${project.frontend_stack}`,
-        `🎨 Aplicando tema ${project.color_theme} com ${project.css_framework}`,
-        '✅ Projeto compilado com sucesso!'
-      ];
+      // Prepare code generation request
+      const codeGenRequest: CodeGenerationRequest = {
+        projectId: project.id,
+        appType: project.type,
+        frontendStack: project.frontend_stack,
+        cssFramework: project.css_framework,
+        colorTheme: project.color_theme,
+        mainFont: project.main_font,
+        layoutStyle: project.layout_style,
+        enableAuth: project.enable_auth,
+        enableDatabase: project.enable_database,
+        enablePayments: project.enable_payments,
+        customPrompt: request.description
+      };
+
+      // Generate real code using Gemini AI
+      const codeGenResult = await this.codeGenerationService.generateCode(codeGenRequest);
+
+      if (!codeGenResult.success) {
+        await this.projectRepo.update(request.projectId, { status: 'error' });
+        return {
+          success: false,
+          message: codeGenResult.message,
+          logs: codeGenResult.logs
+        };
+      }
 
       // Update project status to compiled
       await this.projectRepo.update(request.projectId, { 
@@ -98,7 +122,9 @@ export class ProjectService {
         success: true,
         message: 'Projeto compilado com sucesso!',
         outputPath: `/generated/${project.id}`,
-        logs
+        logs: codeGenResult.logs,
+        generatedCode: codeGenResult.generatedCode,
+        files: codeGenResult.files
       };
     } catch (error) {
       // Update project status to error

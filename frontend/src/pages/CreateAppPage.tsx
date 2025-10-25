@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Settings } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import { CompilationTerminal } from '@/components/features/CompilationTerminal';
 import { APP_TYPES, FRONTEND_STACKS, CSS_FRAMEWORKS, COLOR_THEMES, FONT_FAMILIES, LAYOUT_STYLES } from '../../../shared/types';
 import { APP_TYPES_EXPANDED } from '@/constants/settingsOptions';
 import { useToast } from '@/hooks/useToast';
 import { projectService, CreateProjectRequest } from '@/services/projectService';
+import { AppConfig } from '@/types/app';
 
 // Mapeamento de opções de layout por plataforma
 const LAYOUT_OPTIONS_BY_PLATFORM = {
@@ -807,6 +810,12 @@ const CreateAppPage: React.FC = () => {
 
   const [isCreating, setIsCreating] = useState(false);
   const [generatedPrompt, setGeneratedPrompt] = useState('');
+  
+  // Estados para o terminal de compilação
+  const [showCompilationTerminal, setShowCompilationTerminal] = useState(false);
+  const [compilationCompleted, setCompilationCompleted] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [compilationError, setCompilationError] = useState('');
 
   // Auto-fill prompt based on form data
   useEffect(() => {
@@ -1051,71 +1060,34 @@ const CreateAppPage: React.FC = () => {
 
     setIsCreating(true);
     
-    try {
-      const projectData: CreateProjectRequest = {
-        name: formData.name,
-        description: formData.description,
-        appType: formData.appType,
-        frontendStack: formData.frontendStack,
-        cssFramework: formData.cssFramework,
-        colorTheme: formData.colorTheme,
-        mainFont: formData.mainFont,
-        layoutStyle: formData.layoutStyle,
-        enableAuth: formData.enableAuth,
-        enableDatabase: formData.enableDatabase,
-        enablePayments: formData.enablePayments,
-        authProvider: formData.authProvider,
-        databaseType: formData.databaseType,
-        paymentProvider: formData.paymentProvider,
-        platformType: formData.platformType,
-        menuStructure: formData.menuStructure,
-        adminUsername: formData.adminUsername,
-        adminPassword: formData.adminPassword,
-        authType: formData.authType,
-        customLayoutElements: formData.customLayoutElements
-      };
+    // Redirecionar para a página de compilação com os dados do app
+    navigate('/compilation', { 
+      state: { 
+        appConfig: formData 
+      } 
+    });
+  };
 
-      const response = await projectService.createProject(projectData);
-      
-      if (response.success && response.data) {
-        success('Projeto criado!', `O projeto "${response.data.name}" foi criado com sucesso`);
-        
-        // Reset form
-        setFormData({
-          name: '',
-          description: '',
-          appType: 'Landing Page',
-          frontendStack: 'React',
-          cssFramework: 'TailwindCSS',
-          colorTheme: 'blue',
-          mainFont: 'Inter',
-          layoutStyle: 'modern',
-          enableAuth: false,
-          enableDatabase: false,
-          enablePayments: false,
-          authProvider: '',
-          databaseType: '',
-          paymentProvider: '',
-          platformType: 'web',
-          menuStructure: 'header-footer',
-          adminUsername: '',
-          adminPassword: '',
-          authType: 'simple',
-          customLayoutElements: []
-        });
-        
-        // Redirect to projects page after a delay
-        setTimeout(() => {
-          navigate('/projects');
-        }, 2000);
-      } else {
-        error('Erro ao criar projeto', response.error || 'Não foi possível criar o projeto');
-      }
-    } catch (err) {
-      error('Erro inesperado', 'Ocorreu um erro inesperado ao criar o projeto');
-    } finally {
-      setIsCreating(false);
-    }
+  const handleCompilationComplete = (code: string) => {
+    setGeneratedCode(code);
+    setCompilationCompleted(true);
+    setIsCreating(false);
+    success('App gerado!', `O app "${formData.name}" foi gerado com sucesso!`);
+  };
+
+  const handleCompilationError = (errorMessage: string) => {
+    setCompilationError(errorMessage);
+    setIsCreating(false);
+    error('Erro na compilação', errorMessage);
+  };
+
+  const handleModifyApp = () => {
+    // Reiniciar o processo de compilação para modificar o app
+    setCompilationCompleted(false);
+    setGeneratedCode('');
+    setCompilationError('');
+    setIsCreating(true);
+    // O terminal irá reiniciar automaticamente
   };
 
   // Renderização das etapas do wizard
@@ -2543,16 +2515,21 @@ const CreateAppPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen p-2 sm:p-4 lg:p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 space-y-4 sm:space-y-0">
+    <div className="min-h-screen">
+      {/* Header + Progress Bar - Unified Sticky Component */}
+      <div className="sticky top-8 z-40 bg-gray-900/95 border-b border-gray-700/50 backdrop-blur-lg">
+        {/* Header Section */}
+        <div className="max-w-4xl mx-auto px-2 py-1 sm:px-4 sm:py-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
           <div className="flex items-center space-x-3 sm:space-x-4">
             <Link 
               to="/" 
-              className="group p-2 sm:p-3 text-gray-400 hover:text-white transition-all duration-300 hover:bg-gray-800/50 rounded-xl border border-transparent hover:border-gray-700/50"
+              className="p-2 sm:p-3 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-200 group"
             >
-              <ArrowLeft size={18} className="sm:w-5 sm:h-5 transition-transform duration-300 group-hover:-translate-x-1" />
+              <ArrowLeft 
+                size={18} 
+                className="sm:w-5 sm:h-5 text-gray-400 group-hover:text-white group-hover:-translate-x-0.5 transition-all duration-200" 
+              />
             </Link>
             <div className="h-6 sm:h-8 w-px bg-gray-700"></div>
             <div>
@@ -2569,20 +2546,20 @@ const CreateAppPage: React.FC = () => {
             <Button 
               variant="outline" 
               size="sm"
-              className="group border-gray-700/50 hover:border-gray-600 hover:bg-gray-800/50 transition-all duration-300 text-sm"
+              className="group border-gray-700/50 hover:border-gray-600 hover:bg-gray-800/50 transition-all duration-300 text-sm text-white"
             >
               <Settings size={14} className="mr-2 transition-transform duration-300 group-hover:rotate-90" />
               <span className="hidden sm:inline">Configurações</span>
               <span className="sm:hidden">Config</span>
             </Button>
           </Link>
+          </div>
         </div>
-
-        {/* Wizard Progress Indicator */}
-        <div className="mb-8 sm:mb-10">
-          
+        
+        {/* Progress Bar Section - Directly attached */}
+        <div className="max-w-4xl mx-auto px-2 py-2 sm:px-4 sm:py-3">
           {/* Modern Progress Bar */}
-          <div className="space-y-3 sm:space-y-4">
+          <div className="space-y-2 sm:space-y-3">
             {/* Main Progress Bar */}
             <div className="relative">
               <div className="w-full h-2 sm:h-3 bg-gray-800/60 rounded-full overflow-hidden backdrop-blur-sm border border-gray-700/50">
@@ -2595,7 +2572,7 @@ const CreateAppPage: React.FC = () => {
               </div>
               
               {/* Progress Percentage */}
-              <div className="flex justify-between items-center mt-2">
+              <div className="flex justify-between items-center mt-1 sm:mt-2">
                 <span className="text-xs text-gray-500 font-medium">
                   Progresso
                 </span>
@@ -2604,84 +2581,94 @@ const CreateAppPage: React.FC = () => {
                 </span>
               </div>
             </div>
-            
-
           </div>
-          
-          {/* Instructions Card */}
-          <div className="mt-4 sm:mt-6 bg-gradient-to-r from-gray-800/40 to-gray-900/40 rounded-xl p-4 sm:p-5 border border-gray-700/50 backdrop-blur-sm">
-            <div className="flex items-start space-x-3">
-              <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-xs sm:text-sm font-semibold text-blue-400 mb-1">
-                  Instruções da Etapa
-                </h3>
-                <p className="text-gray-300 text-xs sm:text-sm leading-relaxed">
-                  {WIZARD_STEPS[currentStep - 1]?.description}
-                </p>
-              </div>
+        </div>
+      </div>
+
+      {/* Conteúdo principal */}
+      <div className="max-w-4xl mx-auto p-2 sm:p-4 lg:p-6 pt-4 sm:pt-6">
+        {/* Instructions Card - Scrollable */}
+        <div className="mb-6 sm:mb-8 bg-gradient-to-r from-gray-800/40 to-gray-900/40 rounded-xl p-4 sm:p-5 border border-gray-700/50 backdrop-blur-sm">
+          <div className="flex items-start space-x-3">
+            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-semibold text-blue-400 mb-1">
+                Instruções da Etapa
+              </h3>
+              <p className="text-gray-300 text-xs sm:text-sm leading-relaxed">
+                {WIZARD_STEPS[currentStep - 1]?.description}
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Wizard Steps Content */}
+        {/* Conteúdo do wizard */}
+
+        {/* Wizard Steps Content ou Terminal de Compilação */}
         <div className="mb-6 sm:mb-8 relative">
-          <div className="transition-all duration-500 ease-in-out transform">
-            {currentStep === 1 && (
-              <div className="animate-fadeInSlide">
-                {renderStep1()}
-              </div>
+          <AnimatePresence mode="wait">
+            {showCompilationTerminal ? (
+              <motion.div
+                key="compilation-terminal"
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+              >
+                <CompilationTerminal
+                  appConfig={{
+                    name: formData.name,
+                    description: formData.description,
+                    appType: formData.appType,
+                    frontendStack: formData.frontendStack,
+                    cssFramework: formData.cssFramework,
+                    colorTheme: formData.colorTheme,
+                    mainFont: formData.mainFont,
+                    layoutStyle: formData.layoutStyle,
+                    enableAuth: formData.enableAuth,
+                    enableDatabase: formData.enableDatabase,
+                    enablePayments: formData.enablePayments,
+                    authProvider: formData.authProvider,
+                    databaseType: formData.databaseType,
+                    paymentProvider: formData.paymentProvider,
+                    platformType: formData.platformType,
+                    menuStructure: formData.menuStructure,
+                    adminUsername: formData.adminUsername,
+                    adminPassword: formData.adminPassword,
+                    authType: formData.authType,
+                    customLayoutElements: formData.customLayoutElements
+                  }}
+                  onComplete={handleCompilationComplete}
+                  onError={handleCompilationError}
+                  isModifying={compilationCompleted}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key={`wizard-step-${currentStep}`}
+                initial={{ opacity: 0, x: 30, scale: 0.98 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -30, scale: 0.98 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="w-full"
+              >
+                {currentStep === 1 && renderStep1()}
+                {currentStep === 2 && renderStep2()}
+                {currentStep === 3 && renderStepApplicationType()}
+                {currentStep === 4 && renderStepFrontendAndCSS()}
+                {currentStep === 5 && renderStepThemeAndFont()}
+                {currentStep === 6 && renderStepLayoutStyle()}
+                {currentStep === 7 && renderStepMenuStructure()}
+                {currentStep === 8 && renderStepFeatures()}
+                {currentStep === 9 && renderStepIntegrations()}
+                {currentStep === 10 && renderStep6()}
+              </motion.div>
             )}
-            {currentStep === 2 && (
-              <div className="animate-fadeInSlide">
-                {renderStep2()}
-              </div>
-            )}
-            {currentStep === 3 && (
-              <div className="animate-fadeInSlide">
-                {renderStepApplicationType()}
-              </div>
-            )}
-            {currentStep === 4 && (
-              <div className="animate-fadeInSlide">
-                {renderStepFrontendAndCSS()}
-              </div>
-            )}
-            {currentStep === 5 && (
-              <div className="animate-fadeInSlide">
-                {renderStepThemeAndFont()}
-              </div>
-            )}
-            {currentStep === 6 && (
-              <div className="animate-fadeInSlide">
-                {renderStepLayoutStyle()}
-              </div>
-            )}
-            {currentStep === 7 && (
-              <div className="animate-fadeInSlide">
-                {renderStepMenuStructure()}
-              </div>
-            )}
-            {currentStep === 8 && (
-              <div className="animate-fadeInSlide">
-                {renderStepFeatures()}
-              </div>
-            )}
-            {currentStep === 9 && (
-              <div className="animate-fadeInSlide">
-                {renderStepIntegrations()}
-              </div>
-            )}
-            {currentStep === 10 && (
-              <div className="animate-fadeInSlide">
-                {renderStep6()}
-              </div>
-            )}
-          </div>
+          </AnimatePresence>
         </div>
 
         {/* Navigation Buttons */}
@@ -2692,7 +2679,7 @@ const CreateAppPage: React.FC = () => {
               onClick={prevStep}
               disabled={currentStep === 1}
               variant="outline"
-              className="w-full sm:w-auto group px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-center space-x-2 sm:space-x-3 disabled:opacity-50 disabled:cursor-not-allowed border-gray-600/50 hover:border-gray-500 hover:bg-gray-700/50 transition-all duration-300"
+              className="w-full sm:w-auto group px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-center space-x-2 sm:space-x-3 disabled:opacity-50 disabled:cursor-not-allowed border-gray-600/50 hover:border-gray-500 hover:bg-gray-700/50 transition-all duration-300 text-white"
             >
               <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-700/50 flex items-center justify-center group-hover:bg-gray-600/50 transition-all duration-300">
                 <svg className="w-3 h-3 sm:w-4 sm:h-4 transition-transform duration-300 group-hover:-translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2704,7 +2691,7 @@ const CreateAppPage: React.FC = () => {
             
 
             
-            {currentStep < WIZARD_STEPS.length ? (
+            {!showCompilationTerminal && currentStep < WIZARD_STEPS.length ? (
               <Button
                 type="button"
                 onClick={nextStep}
@@ -2717,7 +2704,7 @@ const CreateAppPage: React.FC = () => {
                   </svg>
                 </div>
               </Button>
-            ) : (
+            ) : !showCompilationTerminal ? (
               <Button
                 type="button"
                 onClick={handleSubmit}
@@ -2732,23 +2719,35 @@ const CreateAppPage: React.FC = () => {
                         <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
                     </div>
-                    <span className="font-medium text-sm sm:text-base">Criando...</span>
+                    <span className="font-medium text-sm sm:text-base">Gerando App...</span>
                   </>
                 ) : (
                   <>
-                    <span className="font-medium text-sm sm:text-base">Finalizar</span>
+                    <span className="font-medium text-sm sm:text-base">Gerar App</span>
                     <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-all duration-300">
                       <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                     </div>
                   </>
                 )}
               </Button>
-            )}
+            ) : compilationCompleted ? (
+              <Button
+                type="button"
+                onClick={handleModifyApp}
+                className="w-full sm:w-auto group px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-center space-x-2 sm:space-x-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 shadow-lg shadow-purple-600/25"
+              >
+                <span className="font-medium text-sm sm:text-base">Modificar (Nova Versão)</span>
+                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-all duration-300">
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+              </Button>
+            ) : null}
           </div>
         </div>
-
       </div>
     </div>
   );

@@ -26,10 +26,14 @@ const SettingsPage: React.FC = () => {
   
   const [settings, setSettings] = useState({
     geminiApiKey: '',
+    defaultAppType: 'landing-page',
     defaultFrontendStack: 'React',
     defaultCssFramework: 'TailwindCSS',
     defaultColorTheme: 'blue',
     defaultLanguage: 'pt-BR',
+    defaultFontFamily: 'Inter',
+    defaultLayoutStyle: 'modern',
+    defaultMenuStructure: 'sidebar',
     darkMode: true,
     autoSave: true,
     notifications: true,
@@ -47,10 +51,14 @@ const SettingsPage: React.FC = () => {
       // Load all settings with proper error handling
       const settingKeys = [
         'geminiApiKey',
+        'defaultAppType',
         'defaultFrontendStack', 
         'defaultCssFramework',
         'defaultColorTheme',
         'defaultLanguage',
+        'defaultFontFamily',
+        'defaultLayoutStyle',
+        'defaultMenuStructure',
         'darkMode',
         'autoSave',
         'notifications',
@@ -81,14 +89,18 @@ const SettingsPage: React.FC = () => {
 
       setSettings({
         geminiApiKey: getValue(0, '') as string,
-        defaultFrontendStack: getValue(1, 'React') as string,
-        defaultCssFramework: getValue(2, 'TailwindCSS') as string,
-        defaultColorTheme: getValue(3, 'blue') as string,
-        defaultLanguage: getValue(4, 'pt-BR') as string,
-        darkMode: getValue(5, true) as boolean,
-        autoSave: getValue(6, true) as boolean,
-        notifications: getValue(7, true) as boolean,
-        defaultCustomLayoutElements: getValue(8, []) as string[]
+        defaultAppType: getValue(1, 'landing-page') as string,
+        defaultFrontendStack: getValue(2, 'React') as string,
+        defaultCssFramework: getValue(3, 'TailwindCSS') as string,
+        defaultColorTheme: getValue(4, 'blue') as string,
+        defaultLanguage: getValue(5, 'pt-BR') as string,
+        defaultFontFamily: getValue(6, 'Inter') as string,
+        defaultLayoutStyle: getValue(7, 'modern') as string,
+        defaultMenuStructure: getValue(8, 'sidebar') as string,
+        darkMode: getValue(9, true) as boolean,
+        autoSave: getValue(10, true) as boolean,
+        notifications: getValue(11, true) as boolean,
+        defaultCustomLayoutElements: getValue(12, []) as string[]
       });
     } catch (err) {
       console.warn('Some settings could not be loaded, using defaults:', err);
@@ -121,10 +133,13 @@ const SettingsPage: React.FC = () => {
       // Save all settings
       const savePromises = [
         settingsService.setSetting('geminiApiKey', settings.geminiApiKey),
+        settingsService.setSetting('defaultAppType', settings.defaultAppType),
         settingsService.setSetting('defaultFrontendStack', settings.defaultFrontendStack),
         settingsService.setSetting('defaultCssFramework', settings.defaultCssFramework),
         settingsService.setSetting('defaultColorTheme', settings.defaultColorTheme),
         settingsService.setSetting('defaultLanguage', settings.defaultLanguage),
+        settingsService.setSetting('defaultFontFamily', settings.defaultFontFamily),
+        settingsService.setSetting('defaultLayoutStyle', settings.defaultLayoutStyle),
         settingsService.setSetting('defaultMenuStructure', settings.defaultMenuStructure),
         settingsService.setSetting('darkMode', settings.darkMode.toString()),
         settingsService.setSetting('autoSave', settings.autoSave.toString()),
@@ -178,10 +193,11 @@ const SettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen p-2 sm:p-4 lg:p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 space-y-4 sm:space-y-0">
+    <div className="min-h-screen">
+      {/* Header fixo */}
+      <div className="sticky top-8 z-40 bg-gray-900/95 border-b border-gray-700/50 backdrop-blur-lg">
+        <div className="max-w-4xl mx-auto px-2 py-1 sm:px-4 sm:py-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 sm:mb-3 space-y-2 sm:space-y-0">
           <div className="flex items-center space-x-3 sm:space-x-4">
             <a 
               href="/" 
@@ -205,17 +221,21 @@ const SettingsPage: React.FC = () => {
             disabled={isSaving} 
             variant="outline"
             size="sm"
-            className="self-start sm:self-auto group border-gray-700/50 hover:border-gray-600 hover:bg-gray-800/50 transition-all duration-300 text-sm"
+            className="self-start sm:self-auto group border-gray-700/50 hover:border-gray-600 hover:bg-gray-800/50 transition-all duration-300 text-sm text-white"
           >
             <Save size={14} className="mr-2 group-hover:rotate-12 transition-transform duration-300" />
             <span className="hidden sm:inline">{isSaving ? 'Salvando...' : 'Salvar Tudo'}</span>
             <span className="sm:hidden">{isSaving ? '...' : 'Salvar'}</span>
           </Button>
+          </div>
         </div>
+      </div>
 
+      {/* Conteúdo principal */}
+      <div className="max-w-4xl mx-auto p-2 sm:p-4 lg:p-6">
         <div className="space-y-6">
           {/* API Configuration */}
-          <Card className="mb-6 sm:mb-8 bg-gray-900/50 border-gray-800/50 backdrop-blur-sm">
+          <Card className="mb-6 sm:mb-8">
             <CardHeader className="pb-3 sm:pb-4">
               <div className="flex items-center gap-2">
                 <Key size={18} className="sm:w-5 sm:h-5 text-blue-400" />
@@ -281,7 +301,7 @@ const SettingsPage: React.FC = () => {
           </Card>
 
           {/* Default Project Settings */}
-          <Card className="mb-6 sm:mb-8 bg-gray-900/50 border-gray-800/50 backdrop-blur-sm">
+          <Card className="mb-6 sm:mb-8">
             <CardHeader className="pb-3 sm:pb-4">
               <CardTitle className="flex items-center text-base sm:text-lg font-semibold text-white">
                 <SettingsIcon size={18} className="sm:w-5 sm:h-5 mr-2 sm:mr-3 text-green-400" />
@@ -306,7 +326,7 @@ const SettingsPage: React.FC = () => {
                       `}
                     >
                       <div className="flex flex-col h-full">
-                        <div className="h-16 mb-3 flex items-center justify-center bg-gray-900/50 rounded-lg">
+                        <div className="h-16 mb-3 flex items-center justify-center rounded-lg">
                           {appType.preview}
                         </div>
                         <div className="flex-1">
@@ -343,7 +363,7 @@ const SettingsPage: React.FC = () => {
                       `}
                     >
                       <div className="flex flex-col h-full">
-                        <div className="h-16 mb-3 flex items-center justify-center bg-gray-900/50 rounded-lg">
+                        <div className="h-16 mb-3 flex items-center justify-center rounded-lg">
                           {stack.preview}
                         </div>
                         <div className="flex-1">
@@ -378,7 +398,7 @@ const SettingsPage: React.FC = () => {
                       `}
                     >
                       <div className="flex flex-col h-full">
-                        <div className="h-16 mb-3 flex items-center justify-center bg-gray-900/50 rounded-lg">
+                        <div className="h-16 mb-3 flex items-center justify-center rounded-lg">
                           {framework.preview}
                         </div>
                         <div className="flex-1">
@@ -413,7 +433,7 @@ const SettingsPage: React.FC = () => {
                       `}
                     >
                       <div className="flex flex-col h-full">
-                        <div className="h-16 mb-3 flex items-center justify-center bg-gray-900/50 rounded-lg p-2">
+                        <div className="h-16 mb-3 flex items-center justify-center rounded-lg p-2">
                           {theme.preview}
                         </div>
                         <div className="flex-1">
@@ -438,24 +458,24 @@ const SettingsPage: React.FC = () => {
                   {FONT_FAMILIES_EXPANDED.map((font) => (
                     <div
                       key={font.value}
-                      onClick={() => handleInputChange('defaultMainFont', font.value)}
+                      onClick={() => handleInputChange('defaultFontFamily', font.value)}
                       className={`
                         relative p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 group
-                        ${settings.defaultMainFont === font.value
+                        ${settings.defaultFontFamily === font.value
                           ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/20'
                           : 'border-gray-700 bg-gray-800/50 hover:border-gray-600 hover:bg-gray-800/70'
                         }
                       `}
                     >
                       <div className="flex flex-col h-full">
-                        <div className="h-16 mb-3 flex items-center justify-center bg-gray-900/50 rounded-lg p-2">
+                        <div className="h-16 mb-3 flex items-center justify-center rounded-lg p-2">
                           {font.preview}
                         </div>
                         <div className="flex-1">
                           <h4 className="font-semibold text-white text-sm mb-1">{font.title}</h4>
                           <p className="text-xs text-gray-400">{font.description}</p>
                         </div>
-                        {settings.defaultMainFont === font.value && (
+                        {settings.defaultFontFamily === font.value && (
                           <div className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
                             <div className="w-2 h-2 bg-white rounded-full"></div>
                           </div>
@@ -483,7 +503,7 @@ const SettingsPage: React.FC = () => {
                       `}
                     >
                       <div className="flex flex-col h-full">
-                        <div className="h-16 mb-3 flex items-center justify-center bg-gray-900/50 rounded-lg p-2">
+                        <div className="h-16 mb-3 flex items-center justify-center rounded-lg p-2">
                           {layout.preview}
                         </div>
                         <div className="flex-1">
@@ -518,7 +538,7 @@ const SettingsPage: React.FC = () => {
                       `}
                     >
                       <div className="flex flex-col h-full">
-                        <div className="h-16 mb-3 flex items-center justify-center bg-gray-900/50 rounded-lg p-2">
+                        <div className="h-16 mb-3 flex items-center justify-center rounded-lg p-2">
                           {menu.preview}
                         </div>
                         <div className="flex-1">
@@ -708,7 +728,7 @@ const SettingsPage: React.FC = () => {
           </Card>
 
           {/* Appearance Settings */}
-          <Card className="mb-6 sm:mb-8 bg-gray-900/50 border-gray-800/50 backdrop-blur-sm">
+          <Card className="mb-6 sm:mb-8">
             <CardHeader className="pb-3 sm:pb-4">
               <CardTitle className="flex items-center text-base sm:text-lg font-semibold text-white">
                 <Palette size={18} className="sm:w-5 sm:h-5 mr-2 sm:mr-3 text-purple-400" />
@@ -740,7 +760,7 @@ const SettingsPage: React.FC = () => {
           </Card>
 
           {/* System Settings */}
-          <Card className="mb-6 sm:mb-8 bg-gray-900/50 border-gray-800/50 backdrop-blur-sm">
+          <Card className="mb-6 sm:mb-8">
             <CardHeader className="pb-3 sm:pb-4">
               <CardTitle className="flex items-center text-base sm:text-lg font-semibold text-white">
                 <Globe size={18} className="sm:w-5 sm:h-5 mr-2 sm:mr-3 text-orange-400" />
@@ -791,7 +811,7 @@ const SettingsPage: React.FC = () => {
           </Card>
 
           {/* Help & Support */}
-          <Card className="bg-gray-900/50 border-gray-800/50 backdrop-blur-sm">
+          <Card className="">
             <CardHeader className="pb-3 sm:pb-4">
               <CardTitle className="flex items-center text-base sm:text-lg font-semibold text-white">
                 <HelpCircle size={18} className="sm:w-5 sm:h-5 mr-2 sm:mr-3 text-yellow-400" />

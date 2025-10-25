@@ -144,16 +144,20 @@ const ProjectsPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen p-2 sm:p-4 lg:p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 space-y-4 sm:space-y-0">
+    <div className="min-h-screen">
+      {/* Header fixo com filtros integrados */}
+      <div className="sticky top-8 z-40 bg-gray-900/95 border-b border-gray-700/50 backdrop-blur-lg">
+        <div className="max-w-4xl mx-auto px-2 py-1 sm:px-4 sm:py-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 sm:mb-3 space-y-2 sm:space-y-0">
           <div className="flex items-center space-x-3 sm:space-x-4">
             <Link 
               to="/" 
-              className="group p-2 sm:p-3 text-gray-400 hover:text-white transition-all duration-300 hover:bg-gray-800/50 rounded-xl border border-transparent hover:border-gray-700/50"
+              className="p-2 sm:p-3 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-200 group"
             >
-              <ArrowLeft size={18} className="sm:w-5 sm:h-5 transition-transform duration-300 group-hover:-translate-x-1" />
+              <ArrowLeft 
+                size={18} 
+                className="sm:w-5 sm:h-5 text-gray-400 group-hover:text-white group-hover:-translate-x-0.5 transition-all duration-200" 
+              />
             </Link>
             <div className="h-6 sm:h-8 w-px bg-gray-700"></div>
             <div>
@@ -170,18 +174,17 @@ const ProjectsPage: React.FC = () => {
             <Button 
               variant="outline"
               size="sm"
-              className="group border-gray-700/50 hover:border-gray-600 hover:bg-gray-800/50 transition-all duration-300 text-sm"
+              className="group border-gray-700/50 hover:border-gray-600 hover:bg-gray-800/50 transition-all duration-300 text-sm text-white"
             >
               <Plus size={14} className="mr-2 transition-transform duration-300 group-hover:rotate-90" />
               <span className="hidden sm:inline">Novo Projeto</span>
               <span className="sm:hidden">Novo</span>
             </Button>
           </Link>
-        </div>
-
-        {/* Filters */}
-        <Card className="mb-4 sm:mb-6">
-          <CardContent>
+          </div>
+          
+          {/* Filters integrados */}
+          <div className="border-t border-gray-700/30 pt-3 mt-3">
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <div className="flex-1">
                 <Input
@@ -205,8 +208,12 @@ const ProjectsPage: React.FC = () => {
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* Conteúdo principal */}
+      <div className="max-w-4xl mx-auto p-2 sm:p-4 lg:p-6">
 
         {/* Projects Grid */}
         {filteredProjects.length === 0 ? (

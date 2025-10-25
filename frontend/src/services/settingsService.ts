@@ -6,7 +6,7 @@ export interface Setting {
 }
 
 export interface GeminiApiKeyResponse {
-  isValid: boolean;
+  success: boolean;
   message: string;
 }
 
@@ -33,17 +33,20 @@ class SettingsService {
 
   // Get Gemini API Key
   async getGeminiApiKey(): Promise<ApiResponse<Setting>> {
-    return apiService.get<Setting>('/settings/gemini-api-key');
+    return apiService.get<Setting>('/settings/gemini/api-key');
   }
 
   // Set Gemini API Key
   async setGeminiApiKey(apiKey: string): Promise<ApiResponse<GeminiApiKeyResponse>> {
-    return apiService.post<GeminiApiKeyResponse>('/settings/gemini-api-key', { apiKey });
+    return apiService.post<GeminiApiKeyResponse>('/settings/gemini/api-key', { apiKey });
   }
 
   // Test Gemini API Key
-  async testGeminiApiKey(): Promise<ApiResponse<GeminiApiKeyResponse>> {
-    return apiService.post<GeminiApiKeyResponse>('/settings/gemini-api-key/test');
+  async testGeminiApiKey(apiKey?: string): Promise<ApiResponse<GeminiApiKeyResponse>> {
+    if (apiKey) {
+      return apiService.post<GeminiApiKeyResponse>('/settings/gemini/test', { apiKey });
+    }
+    return apiService.post<GeminiApiKeyResponse>('/settings/gemini/test');
   }
 }
 

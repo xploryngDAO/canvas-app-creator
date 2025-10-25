@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { ProjectService } from '../services/ProjectService';
 import { ProjectRepository } from '../repositories/ProjectRepository';
+import { CodeGenerationService } from '../services/CodeGenerationService';
+import { SettingsService } from '../services/SettingsService';
+import { SettingsRepository } from '../repositories/SettingsRepository';
 import { initializeDatabase } from '../database/init';
 
 export class ProjectController {
@@ -9,7 +12,10 @@ export class ProjectController {
   constructor() {
     const db = initializeDatabase();
     const projectRepo = new ProjectRepository(db);
-    this.projectService = new ProjectService(projectRepo);
+    const settingsRepo = new SettingsRepository(db);
+    const settingsService = new SettingsService(settingsRepo);
+    const codeGenerationService = new CodeGenerationService(settingsService);
+    this.projectService = new ProjectService(projectRepo, codeGenerationService);
   }
 
   async getAllProjects(req: Request, res: Response): Promise<void> {

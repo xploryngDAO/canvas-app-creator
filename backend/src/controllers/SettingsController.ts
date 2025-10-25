@@ -74,7 +74,7 @@ export class SettingsController {
       }
       const { value } = req.body;
       
-      if (!value && value !== '') {
+      if (value === undefined || value === null) {
         res.status(400).json({
           success: false,
           error: 'Setting value is required'
@@ -180,7 +180,18 @@ export class SettingsController {
 
   async testGeminiApiKey(req: Request, res: Response): Promise<void> {
     try {
-      const result = await this.settingsService.testGeminiApiKey();
+      const { apiKey } = req.body;
+      
+      // If apiKey is provided in request, test it directly
+      // Otherwise, test the stored API key
+      let result;
+      if (apiKey) {
+        // Temporarily test the provided key without saving
+        const testService = new SettingsService(this.settingsService['settingsRepo']);
+        result = await testService.testGeminiApiKeyDirect(apiKey);
+      } else {
+        result = await this.settingsService.testGeminiApiKey();
+      }
       
       res.json({
         success: result.success,

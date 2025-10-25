@@ -30,7 +30,7 @@ const HomePage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen overflow-hidden">
+    <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative px-4 py-20 text-center">
         <div className="max-w-4xl mx-auto">

@@ -59,23 +59,49 @@ export class SettingsService {
         };
       }
 
-      // Simulate API test - in a real implementation, you would make an actual API call
-      // For now, just validate the format
-      if (apiKey.startsWith('AIza') && apiKey.length > 30) {
-        return {
-          success: true,
-          message: 'Chave API válida e funcionando'
-        };
-      } else {
-        return {
-          success: false,
-          message: 'Formato de chave API inválido'
-        };
-      }
+      return this.testGeminiApiKeyDirect(apiKey);
     } catch (error) {
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Erro desconhecido'
+        message: error instanceof Error ? error.message : 'Erro ao testar API'
+      };
+    }
+  }
+
+  async testGeminiApiKeyDirect(apiKey: string): Promise<GeminiApiKeyResponse> {
+    try {
+      // Test the API key with a real request to Gemini
+      const testPayload = {
+        contents: [{ parts: [{ text: "Hello, this is a test message." }] }]
+      };
+
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify(testPayload)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.candidates && result.candidates.length > 0) {
+          return {
+            success: true,
+            message: 'Chave API válida e funcionando'
+          };
+        }
+      }
+
+      return {
+        success: false,
+        message: 'Chave API inválida ou sem permissões'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Erro ao testar API'
       };
     }
   }
