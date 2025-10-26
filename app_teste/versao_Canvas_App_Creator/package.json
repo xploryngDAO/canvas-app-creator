@@ -1,0 +1,25 @@
+{
+  "name": "planner-inteligente-",
+  "version": "1.0.0",
+  "description": "Quero um Planner com um kanban board para controle de tarefas, projetos, agendas e compromissos, conectado a um calendário que mostrará visualmente isto. Integrado a todo o sistema teremos um assistente de IA que terá o poder de gerenciar todas minhas tarefas, projetos, agendas e compromissos, criando novos, editando, movimentando, excluindo ou interpretando e respondendo perguntas sobre as tarefas, projetos, agendas e compromissos. também preciso de um sistema de gráfico Gantt para gerenciar visualmente as tarefas, projetos, agendas ou compromissos.",
+  "main": "index.html",
+  "keywords": [
+    "canvas-app-creator",
+    "webapp",
+    "pwa"
+  ],
+  "author": "Canvas App Creator",
+  "license": "MIT",
+  "scripts": {
+    "start": "npx serve . -s",
+    "dev": "npx serve . -l 3000",
+    "build": "echo \"Build não necessário para aplicação estática\"",
+    "preview": "npx serve . -l 4173"
+  },
+  "devDependencies": {
+    "serve": "^14.2.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

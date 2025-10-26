@@ -72,7 +72,7 @@ export class SettingsService {
     try {
       // Get selected model from settings for testing
       const modelSetting = await this.getSetting('geminiModel');
-      const selectedModel = modelSetting ? modelSetting.value : 'gemini-1.5-flash-002';
+      const selectedModel = modelSetting ? modelSetting.value : 'gemini-2.5-flash';
       
       // Test the API key with a real request to Gemini
       const testPayload = {

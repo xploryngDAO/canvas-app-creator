@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { AppConfig } from '../types/app';
+import JSZip from 'jszip';
 import { 
   ChevronDown, 
   ChevronRight, 
@@ -27,7 +28,8 @@ import {
   Database, 
   Brain, 
   Plug, 
-  StickyNote, 
+  StickyNote,
+  Download, 
   BookOpen, 
   CheckSquare, 
   BarChart3, 
@@ -524,6 +526,299 @@ const IDEPage: React.FC<IDEPageProps> = () => {
     setChatMessage('Prompt otimizado com IA...');
   };
 
+  const downloadProject = async () => {
+    try {
+      console.log('🚀 Iniciando download do projeto...');
+      console.log('📊 Estado atual:', {
+        hasGeneratedCode: !!generatedCode,
+        codeLength: generatedCode?.length || 0,
+        filesCount: generatedFiles.length,
+        appConfigName: appConfig?.appName || appConfig?.name,
+        projectId
+      });
+      
+      const zip = new JSZip();
+      let totalFiles = 0;
+      let totalSize = 0;
+      
+      // Sanitizar nome do projeto para usar como nome do arquivo
+      const sanitizeName = (name: string) => {
+        return name
+          .replace(/[^a-zA-Z0-9\-_\s]/g, '') // Remove caracteres especiais
+          .replace(/\s+/g, '-') // Substitui espaços por hífens
+          .toLowerCase()
+          .trim();
+      };
+      
+      const projectName = sanitizeName(
+        appConfig?.appName || 
+        appConfig?.name || 
+        projectId || 
+        'projeto-gerado'
+      );
+      
+      console.log('📝 Nome do projeto sanitizado:', projectName);
+      
+      // Processar e melhorar o código HTML principal
+      if (generatedCode) {
+        let processedHtml = generatedCode;
+        
+        // Verificar se o HTML tem estrutura básica
+        if (!processedHtml.includes('<!DOCTYPE html>')) {
+          processedHtml = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="${appConfig?.description || 'Aplicação gerada pelo Canvas App Creator'}">
+    <title>${appConfig?.appName || appConfig?.name || 'Canvas App'}</title>
+</head>
+<body>
+${processedHtml}
+</body>
+</html>`;
+        }
+        
+        // Verificar se há CSS inline ou externo e garantir que seja incluído corretamente
+        const hasInlineStyles = processedHtml.includes('<style>') || processedHtml.includes('style=');
+        const hasExternalCSS = generatedFiles.some(file => file.type === 'css');
+        
+        console.log('🎨 Análise de estilos:', {
+          hasInlineStyles,
+          hasExternalCSS,
+          htmlLength: processedHtml.length
+        });
+        
+        // Se há CSS externo, adicionar links no HTML
+        if (hasExternalCSS && !processedHtml.includes('<link')) {
+          const cssFiles = generatedFiles.filter(file => file.type === 'css');
+          const cssLinks = cssFiles.map(file => 
+            `    <link rel="stylesheet" href="${file.path}">`
+          ).join('\n');
+          
+          processedHtml = processedHtml.replace(
+            '</head>',
+            `${cssLinks}\n</head>`
+          );
+        }
+        
+        // Se há JS externo, adicionar scripts no HTML
+        const hasExternalJS = generatedFiles.some(file => file.type === 'js');
+        if (hasExternalJS && !processedHtml.includes('<script src=')) {
+          const jsFiles = generatedFiles.filter(file => file.type === 'js');
+          const jsScripts = jsFiles.map(file => 
+            `    <script src="${file.path}"></script>`
+          ).join('\n');
+          
+          processedHtml = processedHtml.replace(
+            '</body>',
+            `${jsScripts}\n</body>`
+          );
+        }
+        
+        zip.file('index.html', processedHtml);
+        totalFiles++;
+        totalSize += processedHtml.length;
+        console.log('✅ Adicionado index.html ao ZIP', {
+          size: processedHtml.length,
+          hasStyles: hasInlineStyles || hasExternalCSS,
+          hasScripts: processedHtml.includes('<script>')
+        });
+      }
+      
+      // Adicionar todos os arquivos gerados com validação
+      generatedFiles.forEach((file) => {
+        if (file?.content && file?.path) {
+          zip.file(file.path, file.content);
+          totalFiles++;
+          totalSize += file.content.length;
+          console.log(`✅ Adicionado ${file.path} ao ZIP`, {
+            type: file.type,
+            size: file.content.length
+          });
+        } else {
+          console.warn(`⚠️ Arquivo inválido ignorado:`, file);
+        }
+      });
+      
+      // Adicionar package.json melhorado se não existir
+      const hasPackageJson = generatedFiles.some(file => file?.path === 'package.json');
+      if (!hasPackageJson) {
+        const packageJson = {
+          name: projectName,
+          version: '1.0.0',
+          description: appConfig?.description || 'Aplicação gerada pelo Canvas App Creator',
+          main: 'index.html',
+          keywords: ['canvas-app-creator', 'webapp', appConfig?.appType || 'web'],
+          author: 'Canvas App Creator',
+          license: 'MIT',
+          scripts: {
+            start: 'npx serve . -s',
+            dev: 'npx serve . -l 3000',
+            build: 'echo "Build não necessário para aplicação estática"',
+            preview: 'npx serve . -l 4173'
+          },
+          devDependencies: {
+            serve: '^14.2.1'
+          },
+          engines: {
+            node: '>=14.0.0'
+          }
+        };
+        
+        const packageJsonContent = JSON.stringify(packageJson, null, 2);
+        zip.file('package.json', packageJsonContent);
+        totalFiles++;
+        totalSize += packageJsonContent.length;
+        console.log('✅ Adicionado package.json ao ZIP', {
+          name: projectName,
+          size: packageJsonContent.length
+        });
+      }
+      
+      // Adicionar README.md melhorado se não existir
+      const hasReadme = generatedFiles.some(file => file?.path?.toLowerCase()?.includes('readme'));
+      if (!hasReadme) {
+        const readme = `# ${appConfig?.appName || appConfig?.name || 'Canvas App'}
+
+${appConfig?.description || 'Aplicação gerada pelo Canvas App Creator'}
+
+## 📋 Sobre o Projeto
+
+Este projeto foi gerado automaticamente pelo **Canvas App Creator**, uma ferramenta de desenvolvimento visual que permite criar aplicações web de forma intuitiva e eficiente.
+
+## 🚀 Como executar
+
+### Pré-requisitos
+- Node.js (versão 14 ou superior)
+- npm ou yarn
+
+### Instalação e execução
+
+1. **Instale as dependências:**
+   \`\`\`bash
+   npm install
+   \`\`\`
+
+2. **Execute o servidor local:**
+   \`\`\`bash
+   npm start
+   \`\`\`
+
+3. **Abra o navegador em:** http://localhost:3000
+
+### Scripts disponíveis
+
+- \`npm start\` - Inicia o servidor de desenvolvimento
+- \`npm run dev\` - Alias para start (porta 3000)
+- \`npm run preview\` - Servidor de preview (porta 4173)
+
+## 🛠️ Tecnologias utilizadas
+
+- **HTML5** - Estrutura da aplicação
+- **CSS3** - Estilização e layout
+- **JavaScript** - Interatividade e lógica
+- **${appConfig?.frontend_stack || 'Vanilla JS'}** - Framework frontend
+- **${appConfig?.css_framework || 'CSS Puro'}** - Framework de estilos
+
+## 📁 Estrutura do projeto
+
+\`\`\`
+${projectName}/
+├── index.html          # Página principal
+├── package.json        # Configurações e dependências
+├── README.md          # Este arquivo
+${generatedFiles.map(file => `├── ${file.path}           # ${file.type.toUpperCase()} file`).join('\n')}
+\`\`\`
+
+## 🎨 Configurações do projeto
+
+- **Tipo de aplicação:** ${appConfig?.appType || 'Web'}
+- **Tema de cores:** ${appConfig?.colorTheme || 'Padrão'}
+- **Fonte principal:** ${appConfig?.mainFont || 'Inter'}
+- **Estilo de layout:** ${appConfig?.layoutStyle || 'Moderno'}
+- **Autenticação:** ${appConfig?.enableAuth ? 'Habilitada' : 'Desabilitada'}
+- **Banco de dados:** ${appConfig?.enableDatabase ? 'Habilitado' : 'Desabilitado'}
+- **Pagamentos:** ${appConfig?.enablePayments ? 'Habilitados' : 'Desabilitados'}
+
+## 📞 Suporte
+
+Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
+
+---
+
+**Gerado com ❤️ pelo Canvas App Creator**  
+*Data de geração: ${new Date().toLocaleDateString('pt-BR')}*
+`;
+        zip.file('README.md', readme);
+        totalFiles++;
+        totalSize += readme.length;
+        console.log('✅ Adicionado README.md ao ZIP', {
+          size: readme.length
+        });
+      }
+      
+      console.log('📦 Resumo do pacote:', {
+        totalFiles,
+        totalSize: `${(totalSize / 1024).toFixed(2)} KB`,
+        projectName
+      });
+      
+      // Gerar o arquivo ZIP com configurações otimizadas
+      console.log('🔄 Gerando arquivo ZIP...');
+      const content = await zip.generateAsync({ 
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: {
+          level: 6
+        }
+      });
+      
+      console.log('✅ ZIP gerado com sucesso:', {
+        originalSize: `${(totalSize / 1024).toFixed(2)} KB`,
+        compressedSize: `${(content.size / 1024).toFixed(2)} KB`,
+        compressionRatio: `${((1 - content.size / totalSize) * 100).toFixed(1)}%`
+      });
+      
+      // Criar e executar download
+      const url = window.URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${projectName}.zip`;
+      link.style.display = 'none';
+      
+      // Adicionar ao DOM temporariamente para garantir compatibilidade
+      document.body.appendChild(link);
+      link.click();
+      
+      // Limpeza após pequeno delay para garantir que o download iniciou
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        console.log('🧹 Limpeza de memória concluída');
+      }, 100);
+      
+      console.log('🎉 Download iniciado com sucesso!', {
+        fileName: `${projectName}.zip`,
+        fileSize: `${(content.size / 1024).toFixed(2)} KB`
+      });
+      
+    } catch (error) {
+      console.error('❌ Erro detalhado ao fazer download do projeto:', {
+        error: error.message,
+        stack: error.stack,
+        appConfig,
+        hasGeneratedCode: !!generatedCode,
+        filesCount: generatedFiles.length
+      });
+      
+      // Tentar mostrar uma mensagem de erro amigável para o usuário
+      if (typeof window !== 'undefined' && window.alert) {
+        alert(`Erro ao gerar download: ${error.message}\n\nVerifique o console para mais detalhes.`);
+      }
+    }
+  };
+
   const handleBackToOriginalPrompt = () => {
     console.log('Voltando ao prompt original');
     setChatMessage(originalPrompt);
@@ -757,7 +1052,17 @@ const IDEPage: React.FC<IDEPageProps> = () => {
       case 'files':
         return (
           <div className="p-4">
-            <h3 className="text-white font-medium mb-4">Arquivos Gerados</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-medium">Arquivos Gerados</h3>
+              <Button
+                onClick={downloadProject}
+                disabled={generatedFiles.length === 0 && !generatedCode}
+                className="p-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Download do projeto completo"
+              >
+                <Download size={16} />
+              </Button>
+            </div>
             {generatedFiles.length === 0 ? (
               <div className="text-center text-gray-500 mt-8">
                 <FolderOpen size={48} className="mx-auto mb-4 opacity-50" />

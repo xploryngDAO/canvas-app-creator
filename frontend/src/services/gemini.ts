@@ -21,7 +21,7 @@ export interface AppConfig {
 
 class GeminiService {
   private apiKey: string | null = null;
-  private model: string = 'gemini-1.5-flash-002';
+  private model: string = 'gemini-2.5-flash';
   private baseUrl = '';
 
   async init(): Promise<void> {
@@ -29,7 +29,7 @@ class GeminiService {
     this.apiKey = apiKeySetting ? apiKeySetting.value : null;
     
     const modelSetting = await database.getSetting('geminiModel');
-    this.model = modelSetting ? modelSetting.value : 'gemini-1.5-flash-002';
+    this.model = modelSetting ? modelSetting.value : 'gemini-2.5-flash';
     
     this.updateBaseUrl();
     
@@ -50,7 +50,7 @@ class GeminiService {
     this.apiKey = apiKeySetting ? apiKeySetting.value : null;
     
     const modelSetting = await database.getSetting('geminiModel');
-    this.model = modelSetting ? modelSetting.value : 'gemini-1.5-flash-002';
+    this.model = modelSetting ? modelSetting.value : 'gemini-2.5-flash';
     
     this.updateBaseUrl();
     
@@ -81,7 +81,7 @@ class GeminiService {
     console.log('🔍 [DEBUG] GeminiService setApiKey - API Key salva no database');
   }
 
-  async generateApp(config: AppConfig): Promise<GeminiResponse> {
+  async generateApp(config: AppConfig, customPrompt?: string): Promise<GeminiResponse> {
     if (!this.apiKey) {
       console.error('❌ [ERROR] API Key não configurada');
       return {
@@ -136,7 +136,7 @@ class GeminiService {
         console.log(`🔄 [DEBUG] Tentativa ${attempt}/${maxRetries} com modelo ${this.model}`);
         
         try {
-          const result = await this.generateAppWithoutRetry(config);
+          const result = await this.generateAppWithoutRetry(config, customPrompt);
           
           if (result.success && result.code) {
             console.log('✅ [DEBUG] Geração bem-sucedida na tentativa', attempt);
@@ -162,7 +162,7 @@ class GeminiService {
               currentModelIndex++;
               
               // Tentar com o novo modelo
-              const fallbackResult = await this.generateAppWithoutRetry(config);
+              const fallbackResult = await this.generateAppWithoutRetry(config, customPrompt);
               
               if (fallbackResult.success && fallbackResult.code) {
                 console.log(`✅ [DEBUG] Sucesso com modelo de fallback: ${fallbackModel}`);
@@ -415,26 +415,19 @@ class GeminiService {
     return null;
   }
 
-  private async generateAppWithoutRetry(config: AppConfig): Promise<GeminiResponse> {
+  private async generateAppWithoutRetry(config: AppConfig, customPrompt?: string): Promise<GeminiResponse> {
     // Versão sem retry para evitar loop infinito
     try {
-      const prompt = this.buildPrompt(config);
+      const prompt = customPrompt || this.buildPrompt(config);
       
-      // Usar configuração idêntica ao index_sqlite.html que funciona
-      const systemPrompt = `Você é um desenvolvedor web especialista. Crie um aplicativo web completo usando HTML, CSS (Tailwind) e JavaScript vanilla com ABORDAGEM MOBILE-FIRST.
-
-INSTRUÇÕES IMPORTANTES:
-- Retorne APENAS o código HTML completo, sem explicações
-- Use Tailwind CSS via CDN para estilização
-- Inclua JavaScript inline no HTML
-- OBRIGATÓRIO: Design MOBILE-FIRST com 100% de responsividade
-- Use classes responsivas do Tailwind (sm:, md:, lg:, xl:)
-- Inclua meta viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">
-- Elementos touch-friendly (mínimo 44px de altura para botões)
-- Layout flexível que funciona em todas as telas (320px+)
-- Teste mental em: mobile (320px), tablet (768px), desktop (1024px+)
-- Priorize experiência mobile, depois adapte para telas maiores
-- Garanta que o código seja funcional e completamente responsivo`;
+      // Detectar tipo de aplicação para definir abordagem de responsividade
+      const responsiveApproach = this.detectResponsiveApproach(config, customPrompt);
+      
+      // System prompt flexível que colabora com custom prompt
+      const systemPrompt = this.buildAdaptiveSystemPrompt(responsiveApproach);
+      
+      console.log(`🎯 [GEMINI] Abordagem de responsividade detectada: ${responsiveApproach}`);
+      console.log('🔍 [DEBUG] Usando configuração adaptativa baseada no tipo de aplicação');
 
       console.log('🔍 [DEBUG] Usando configuração idêntica ao index_sqlite.html');
       console.log('URL:', this.baseUrl);
@@ -524,6 +517,116 @@ INSTRUÇÕES IMPORTANTES:
     } catch (error) {
       console.error('🔍 [DEBUG] Erro ao verificar quota:', error);
       return { available: false };
+    }
+  }
+
+  /**
+   * Detecta a abordagem de responsividade baseada no tipo de aplicação
+   */
+  private detectResponsiveApproach(config: AppConfig, customPrompt?: string): 'mobile-first' | 'desktop-first' {
+    // Analisar custom prompt primeiro (prioridade máxima)
+    if (customPrompt) {
+      const lowerPrompt = customPrompt.toLowerCase();
+      
+      // Palavras-chave que indicam desktop-first
+      const desktopKeywords = [
+        'desktop', 'admin', 'dashboard', 'management', 'cms', 'crm', 'erp',
+        'enterprise', 'business', 'corporate', 'professional', 'office',
+        'analytics', 'reporting', 'data visualization', 'complex interface',
+        'multi-panel', 'sidebar', 'desktop-first', 'large screen'
+      ];
+      
+      // Palavras-chave que indicam mobile-first
+      const mobileKeywords = [
+        'mobile', 'app', 'touch', 'swipe', 'responsive', 'mobile-first',
+        'smartphone', 'tablet', 'pwa', 'progressive web app', 'social',
+        'chat', 'messaging', 'e-commerce', 'shopping', 'blog', 'portfolio'
+      ];
+      
+      const hasDesktopKeywords = desktopKeywords.some(keyword => lowerPrompt.includes(keyword));
+      const hasMobileKeywords = mobileKeywords.some(keyword => lowerPrompt.includes(keyword));
+      
+      if (hasDesktopKeywords && !hasMobileKeywords) {
+        return 'desktop-first';
+      }
+    }
+    
+    // Analisar configuração do app
+    const appType = config.appType?.toLowerCase() || '';
+    const description = config.description?.toLowerCase() || '';
+    
+    // Tipos de aplicação que geralmente são desktop-first
+    const desktopAppTypes = [
+      'admin panel', 'dashboard', 'cms', 'crm', 'erp', 'management system',
+      'analytics', 'reporting', 'data visualization', 'enterprise'
+    ];
+    
+    const isDesktopApp = desktopAppTypes.some(type => 
+      appType.includes(type) || description.includes(type)
+    );
+    
+    return isDesktopApp ? 'desktop-first' : 'mobile-first';
+  }
+
+  /**
+   * Constrói um system prompt adaptativo baseado na abordagem de responsividade
+   */
+  private buildAdaptiveSystemPrompt(approach: 'mobile-first' | 'desktop-first'): string {
+    const baseInstructions = `Você é um desenvolvedor web especialista. Crie um aplicativo web completo usando as tecnologias e frameworks especificados no prompt personalizado.
+
+INSTRUÇÕES FUNDAMENTAIS:
+- Retorne APENAS o código HTML completo, sem explicações adicionais
+- Use as tecnologias, frameworks e bibliotecas especificadas no prompt personalizado
+- Implemente a estrutura e funcionalidades conforme solicitado
+- Garanta que o código seja funcional e completamente responsivo
+- Use breakpoints responsivos apropriados para a tecnologia escolhida
+- Siga as melhores práticas de acessibilidade (WCAG 2.1)
+- Otimize para performance, SEO e experiência do usuário
+- Mantenha consistência com o sistema de design especificado
+
+QUALIDADE DE CÓDIGO (ALTA PRIORIDADE):
+- Use HTML5 semântico com tags apropriadas (header, nav, main, section, article, aside, footer)
+- Implemente meta tags essenciais: viewport, description, charset, og:tags
+- Adicione estrutura de dados JSON-LD quando relevante
+- Use lazy loading para imagens: loading="lazy"
+- Implemente preload para recursos críticos
+- Garanta contraste adequado (mínimo 4.5:1 para texto normal)
+- Use aria-labels e roles para acessibilidade
+- Implemente skip links para navegação por teclado
+- Otimize Critical Rendering Path com CSS inline para above-the-fold
+- Use CSS Grid e Flexbox de forma eficiente
+- Implemente Progressive Enhancement
+- Adicione estados de hover, focus e active consistentes
+- Use animações CSS performáticas (transform, opacity)
+- Implemente error boundaries e fallbacks
+- Garanta que funcione sem JavaScript (quando possível)`;
+
+    if (approach === 'mobile-first') {
+      return `${baseInstructions}
+
+ABORDAGEM MOBILE-FIRST:
+- Priorize a experiência mobile como base do design
+- Elementos touch-friendly (mínimo 44px de altura para botões e áreas clicáveis)
+- Layout flexível que funciona perfeitamente em telas pequenas (320px+)
+- Use breakpoints progressivos: mobile → tablet (768px+) → desktop (1024px+)
+- Navegação otimizada para mobile (menu colapsável, navegação inferior quando apropriado)
+- Conteúdo hierarquizado para leitura e interação vertical
+- Imagens e mídia responsivas com carregamento otimizado
+- Prioridade de teste: mobile (375px), tablet (768px), desktop (1200px+)
+- Gestos e interações naturais para dispositivos touch`;
+    } else {
+      return `${baseInstructions}
+
+ABORDAGEM DESKTOP-FIRST:
+- Priorize interfaces produtivas e eficientes para desktop
+- Layout otimizado para telas grandes com aproveitamento do espaço disponível
+- Navegação horizontal com menus expandidos e sidebars quando apropriado
+- Aproveite o espaço para dashboards, visualizações e interfaces complexas
+- Use breakpoints regressivos: desktop → tablet (1024px-) → mobile (768px-)
+- Mantenha funcionalidade completa em mobile através de adaptações inteligentes
+- Elementos de interface otimizados para mouse e teclado, mas acessíveis em touch
+- Prioridade de teste: desktop (1200px+), tablet (768px), mobile (375px)
+- Atalhos de teclado e interações avançadas quando relevante`;
     }
   }
 }

@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planner Inteligente</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Roboto -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        /* Custom scrollbar for dark theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2D3748; /* bg-gray-800 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #F6AD55; /* bg-orange-400 */
+            border-radius: 4px;
+            border: 2px solid #2D3748;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: #ED8936; /* bg-orange-500 */
+        }
+
+        /* Basic styles for draggable elements */
+        .kanban-task.dragging {
+            opacity: 0.5;
+            border: 2px dashed #F6AD55; /* orange-400 */
+        }
+
+        /* Ensure min-height/width for touch targets */
+        .btn-touch {
+            min-height: 44px;
+            min-width: 44px;
+        }
+        .input-touch {
+            min-height: 44px;
+        }
+        /* Animation for modal */
+        @keyframes fadeInMoveUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-fade-in-up {
+            animation: fadeInMoveUp 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex flex-col min-h-screen">
+
+    <!-- Mobile Header (Visible only on screens smaller than md) -->
+    <header class="bg-gray-800 p-4 flex items-center justify-between md:hidden shadow-md sticky top-0 z-40">
+        <h1 class="text-2xl font-bold text-orange-500">Planner Inteligente</h1>
+        <button id="mobile-menu-button" class="text-gray-100 focus:outline-none p-2 btn-touch" aria-label="Abrir menu de navegação">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        </button>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar Navigation -->
+        <!-- Hidden by default on mobile, slides in. Always visible on md screens and up. -->
+        <nav id="sidebar" class="fixed inset-y-0 left-0 w-64 bg-gray-800 p-4 transform -translate-x-full md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-50 md:flex flex-col shadow-lg">
+            <h2 class="text-3xl font-bold text-orange-500 mb-6 text-center hidden md:block">Planner Inteligente</h2>
+            <div class="flex-1 flex flex-col space-y-2">
+                <button class="nav-item flex items-center p-3 text-lg font-medium text-gray-300 hover:bg-orange-600 hover:text-white rounded-lg transition-colors duration-200 active-nav bg-orange-600 text-white btn-touch" data-target="kanban-view" aria-label="Visualizar Kanban Board">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2v10zm12 0a2 2 0 01-2 2h-2a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2v10zm-6 0a2 2 0 01-2 2H9a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2v10z"></path></svg>
+                    <span>Kanban Board</span>
+                </button>
+                <button class="nav-item flex items-center p-3 text-lg font-medium text-gray-300 hover:bg-orange-600 hover:text-white rounded-lg transition-colors duration-200 btn-touch" data-target="calendar-view" aria-label="Visualizar Calendário">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <span>Calendário</span>
+                </button>
+                <button class="nav-item flex items-center p-3 text-lg font-medium text-gray-300 hover:bg-orange-600 hover:text-white rounded-lg transition-colors duration-200 btn-touch" data-target="gantt-view" aria-label="Visualizar Gráfico Gantt">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    <span>Gráfico Gantt</span>
+                </button>
+                <button class="nav-item flex items-center p-3 text-lg font-medium text-gray-300 hover:bg-orange-600 hover:text-white rounded-lg transition-colors duration-200 btn-touch" data-target="ai-view" aria-label="Abrir Assistente de IA">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m12.728 0l-.707.707M12 21v-1m-4.663-3h4.673M12 3a4 4 0 100 8 4 4 0 000-8z"></path></svg>
+                    <span>Assistente de IA</span>
+                </button>
+            </div>
+            <!-- Close button for mobile sidebar -->
+            <button id="close-sidebar-button" class="absolute top-4 right-4 text-gray-100 md:hidden p-2 btn-touch" aria-label="Fechar menu lateral">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 p-4 md:p-8 overflow-y-auto relative">
+            <!-- Kanban Board View -->
+            <section id="kanban-view" class="content-view active-view">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
+                    <h2 class="text-3xl font-bold text-orange-400 mb-4 sm:mb-0">Kanban Board</h2>
+                    <button id="add-task-button" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 flex items-center btn-touch">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        Adicionar Tarefa
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- To Do Column -->
+                    <div id="todo-column" class="kanban-column bg-gray-800 rounded-lg p-4 shadow-xl min-h-[300px]" data-status="todo">
+                        <h3 class="text-xl font-semibold text-gray-200 mb-4 pb-2 border-b-2 border-orange-500">A Fazer <span class="text-sm text-gray-400" id="todo-count">(0)</span></h3>
+                        <div id="todo-tasks" class="space-y-4 min-h-[200px]">
+                            <!-- Tasks will be injected here -->
+                        </div>
+                    </div>
+
+                    <!-- In Progress Column -->
+                    <div id="in-progress-column" class="kanban-column bg-gray-800 rounded-lg p-4 shadow-xl min-h-[300px]" data-status="in-progress">
+                        <h3 class="text-xl font-semibold text-gray-200 mb-4 pb-2 border-b-2 border-blue-500">Em Andamento <span class="text-sm text-gray-400" id="in-progress-count">(0)</span></h3>
+                        <div id="in-progress-tasks" class="space-y-4 min-h-[200px]">
+                            <!-- Tasks will be injected here -->
+                        </div>
+                    </div>
+
+                    <!-- Done Column -->
+                    <div id="done-column" class="kanban-column bg-gray-800 rounded-lg p-4 shadow-xl min-h-[300px]" data-status="done">
+                        <h3 class="text-xl font-semibold text-gray-200 mb-4 pb-2 border-b-2 border-green-500">Concluído <span class="text-sm text-gray-400" id="done-count">(0)</span></h3>
+                        <div id="done-tasks" class="space-y-4 min-h-[200px]">
+                            <!-- Tasks will be injected here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Calendar View -->
+            <section id="calendar-view" class="content-view hidden">
+                <h2 class="text-3xl font-bold text-orange-400 mb-6">Calendário</h2>
+                <div class="bg-gray-800 rounded-lg p-6 shadow-xl">
+                    <div class="flex items-center justify-between mb-6">
+                        <button id="prev-month" class="bg-gray-700 hover:bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 btn-touch" aria-label="Mês anterior">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </button>
+                        <h3 id="current-month-year" class="text-2xl font-semibold text-gray-100">Dezembro 2023</h3>
+                        <button id="next-month" class="bg-gray-700 hover:bg-gray-600 text-gray-100 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 btn-touch" aria-label="Próximo mês">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-7 gap-2 text-center text-gray-400 font-medium mb-2">
+                        <span>Dom</span>
+                        <span>Seg</span>
+                        <span>Ter</span>
+                        <span>Qua</span>
+                        <span>Qui</span>
+                        <span>Sex</span>
+                        <span>Sáb</span>
+                    </div>
+                    <div id="calendar-grid" class="grid grid-cols-7 gap-2">
+                        <!-- Calendar days will be injected here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Gantt Chart View -->
+            <section id="gantt-view" class="content-view hidden">
+                <h2 class="text-3xl font-bold text-orange-400 mb-6">Gráfico Gantt</h2>
+                <div class="bg-gray-800 rounded-lg p-6 shadow-xl overflow-x-auto">
+                    <div id="gantt-chart-container" class="min-w-[700px] lg:min-w-full">
+                        <div class="flex items-center text-gray-300 font-semibold text-sm mb-4 border-b border-gray-700 pb-2">
+                            <div class="w-1/4 min-w-[120px] pr-2">Tarefa</div>
+                            <div class="w-3/4 flex-1 grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1 text-center">
+                                <!-- Months/Weeks header will be dynamically generated -->
+                            </div>
+                        </div>
+                        <div id="gantt-tasks-list" class="space-y-4">
+                            <!-- Gantt tasks will be injected here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI Assistant View -->
+            <section id="ai-view" class="content-view hidden flex flex-col h-full">
+                <h2 class="text-3xl font-bold text-orange-400 mb-6">Assistente de IA</h2>
+                <div class="bg-gray-800 rounded-lg p-6 shadow-xl flex flex-col flex-1 h-full min-h-[500px]">
+                    <div id="ai-conversation" class="flex-1 overflow-y-auto mb-4 p-2 pr-4 space-y-4 border-b border-gray-700 max-h-[calc(100%-100px)]">
+                        <div class="flex items-start">
+                            <img src="https://ui-avatars.com/api/?name=AI&background=ED8936&color=fff&size=32" alt="AI Avatar" class="w-8 h-8 rounded-full mr-3">
+                            <div class="bg-gray-700 p-3 rounded-lg max-w-[80%] text-gray-200">
+                                Olá! Sou seu assistente de IA. Como posso ajudar com suas tarefas hoje?
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4 pt-4">
+                        <textarea id="ai-input" rows="1" class="flex-1 p-3 rounded-lg bg-gray-700 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none input-touch" placeholder="Digite sua pergunta ou comando..." aria-label="Digite sua pergunta ou comando para o assistente de IA"></textarea>
+                        <button id="ai-send-button" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 btn-touch" aria-label="Enviar mensagem ao assistente de IA">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 12h14"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Task Modal (hidden by default) -->
+            <div id="task-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+                <div class="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md relative animate-fade-in-up">
+                    <h3 id="modal-title" class="text-2xl font-bold text-orange-400 mb-4">Nova Tarefa</h3>
+                    <form id="task-form" class="space-y-4">
+                        <div>
+                            <label for="task-title" class="block text-gray-300 text-sm font-semibold mb-2">Título:</label>
+                            <input type="text" id="task-title" class="w-full p-3 rounded-lg bg-gray-700 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 input-touch" required aria-label="Título da tarefa">
+                        </div>
+                        <div>
+                            <label for="task-description" class="block text-gray-300 text-sm font-semibold mb-2">Descrição:</label>
+                            <textarea id="task-description" rows="3" class="w-full p-3 rounded-lg bg-gray-700 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-y input-touch" aria-label="Descrição da tarefa"></textarea>
+                        </div>
+                        <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                            <div class="flex-1">
+                                <label for="task-start-date" class="block text-gray-300 text-sm font-semibold mb-2">Data de Início:</label>
+                                <input type="date" id="task-start-date" class="w-full p-3 rounded-lg bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 input-touch" required aria-label="Data de início da tarefa">
+                            </div>
+                            <div class="flex-1">
+                                <label for="task-end-date" class="block text-gray-300 text-sm font-semibold mb-2">Data de Término:</label>
+                                <input type="date" id="task-end-date" class="w-full p-3 rounded-lg bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 input-touch" aria-label="Data de término da tarefa">
+                            </div>
+                        </div>
+                        <div>
+                            <label for="task-status" class="block text-gray-300 text-sm font-semibold mb-2">Status:</label>
+                            <select id="task-status" class="w-full p-3 rounded-lg bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 input-touch" aria-label="Status da tarefa">
+                                <option value="todo">A Fazer</option>
+                                <option value="in-progress">Em Andamento</option>
+                                <option value="done">Concluído</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-end space-x-4 mt-6">
+                            <button type="button" id="cancel-task-button" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 btn-touch" aria-label="Cancelar edição de tarefa">Cancelar</button>
+                            <button type="submit" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 btn-touch" aria-label="Salvar tarefa">Salvar Tarefa</button>
+                        </div>
+                    </form>
+                    <button id="close-modal-button" class="absolute top-4 right-4 text-gray-300 hover:text-white p-2 btn-touch" aria-label="Fechar modal">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const sidebar = document.getElementById('sidebar');
+        const closeSidebarButton = document.getElementById('close-sidebar-button');
+        const navItems = document.querySelectorAll('.nav-item');
+        const contentViews = document.querySelectorAll('.content-view');
+
+        // Task Modal elements
+        const taskModal = document.getElementById('task-modal');
+        const addTaskButton = document.getElementById('add-task-button');
+        const closeTaskModalButton = document.getElementById('close-modal-button');
+        const cancelTaskButton = document.getElementById('cancel-task-button');
+        const taskForm = document.getElementById('task-form');
+        const modalTitle = document.getElementById('modal-title');
+        const taskTitleInput = document.getElementById('task-title');
+        const taskDescriptionInput = document.getElementById('task-description');
+        const taskStartDateInput = document.getElementById('task-start-date');
+        const taskEndDateInput = document.getElementById('task-end-date');
+        const taskStatusSelect = document.getElementById('task-status');
+
+        let tasks = JSON.parse(localStorage.getItem('plannerTasks')) || [];
+        let editingTaskId = null;
+
+        // --- Helper Functions ---
+
+        function saveTasks() {
+            localStorage.setItem('plannerTasks', JSON.stringify(tasks));
+            renderKanbanBoard();
+            renderCalendar();
+            renderGanttChart();
+        }
+
+        function generateUniqueId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString + 'T00:00:00'); // Treat as UTC to avoid timezone issues
+            return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+        }
+
+        function getStatusColorClass(status) {
+            switch (status) {
+                case 'todo': return 'border-orange-500'; // Used for border-t-4
+                case 'in-progress': return 'border-blue-500';
+                case 'done': return 'border-green-500';
+                default: return 'border-gray-500';
+            }
+        }
+
+        function getGanttBarColorClass(status) {
+             switch (status) {
+                case 'todo': return 'bg-orange-500';
+                case 'in-progress': return 'bg-blue-500';
+                case 'done': return 'bg-green-500';
+                default: return 'bg-gray-500';
+            }
+        }
+
+        // --- Sidebar & View Management ---
+
+        mobileMenuButton.addEventListener('click', () => {
+            sidebar.classList.toggle('-translate-x-full');
+            sidebar.classList.toggle('shadow-2xl');
+        });
+
+        closeSidebarButton.addEventListener('click', () => {
+            sidebar.classList.add('-translate-x-full');
+            sidebar.classList.remove('shadow-2xl');
+        });
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                navItems.forEach(nav => nav.classList.remove('active-nav', 'bg-orange-600', 'text-white'));
+                item.classList.add('active-nav', 'bg-orange-600', 'text-white');
+
+                const targetView = item.dataset.target;
+                contentViews.forEach(view => {
+                    // Specific handling for AI view as it needs flex-col
+                    if (view.id === targetView) {
+                        view.classList.remove('hidden');
+                        if (targetView === 'ai-view') {
+                             view.classList.add('flex');
+                        }
+                    } else {
+                        view.classList.add('hidden');
+                        if (view.classList.contains('flex')) {
+                            view.classList.remove('flex');
+                        }
+                    }
+                });
+
+                // Close sidebar on mobile after selection
+                if (window.innerWidth < 768) {
+                    sidebar.classList.add('-translate-x-full');
+                    sidebar.classList.remove('shadow-2xl');
+                }
+
+                // Render specific views when they become active
+                if (targetView === 'kanban-view') renderKanbanBoard();
+                if (targetView === 'calendar-view') renderCalendar();
+                if (targetView === 'gantt-view') renderGanttChart();
+                if (targetView === 'ai-view') {
+                    // Ensure the AI input textarea dynamically adjusts height
+                    const aiInput = document.getElementById('ai-input');
+                    aiInput.style.height = 'auto';
+                    aiInput.style.height = aiInput.scrollHeight + 'px';
+                }
+            });
+        });
+
+        // Activate the first nav item and show its view on load
+        document.addEventListener('DOMContentLoaded', () => {
+            if (navItems.length > 0) {
+                // Manually trigger the click for the initial state
+                document.querySelector('[data-target="kanban-view"]').click();
+            }
+        });
+
+
+        // --- Task Modal & Form Logic ---
+
+        function openTaskModal(task = null) {
+            taskForm.reset();
+            editingTaskId = null;
+            modalTitle.textContent = 'Nova Tarefa';
+            taskStatusSelect.value = 'todo'; // Default status
+
+            if (task) {
+                editingTaskId = task.id;
+                modalTitle.textContent = 'Editar Tarefa';
+                taskTitleInput.value = task.title;
+                taskDescriptionInput.value = task.description;
+                taskStartDateInput.value = task.startDate;
+                taskEndDateInput.value = task.endDate;
+                taskStatusSelect.value = task.status;
+            }
+
+            taskModal.classList.remove('hidden');
+            // Animate in
+            taskModal.querySelector('.max-w-md').classList.remove('animate-fade-in-up');
+            taskModal.querySelector('.max-w-md').classList.add('animate-fade-in-up'); // Re-add to restart animation
+        }
+
+        function closeTaskModal() {
+            taskModal.classList.add('hidden');
+            taskModal.querySelector('.max-w-md').classList.remove('animate-fade-in-up');
+        }
+
+        addTaskButton.addEventListener('click', () => openTaskModal());
+        closeTaskModalButton.addEventListener('click', closeTaskModal);
+        cancelTaskButton.addEventListener('click', closeTaskModal);
+
+        taskModal.addEventListener('click', (event) => {
+            if (event.target === taskModal) { // Only close if clicking on the backdrop
+                closeTaskModal();
+            }
+        });
+
+        taskForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            const title = taskTitleInput.value.trim();
+            const description = taskDescriptionInput.value.trim();
+            const startDate = taskStartDateInput.value;
+            const endDate = taskEndDateInput.value;
+            const status = taskStatusSelect.value;
+
+            if (!title) {
+                alert('O título da tarefa é obrigatório.');
+                return;
+            }
+
+            if (endDate && startDate && new Date(startDate) > new Date(endDate)) {
+                alert('A data de término não pode ser anterior à data de início.');
+                return;
+            }
+
+            if (editingTaskId) {
+                const taskIndex = tasks.findIndex(t => t.id === editingTaskId);
+                if (taskIndex !== -1) {
+                    tasks[taskIndex] = { ...tasks[taskIndex], title, description, startDate, endDate, status };
+                }
+            } else {
+                tasks.push({
+                    id: generateUniqueId(),
+                    title,
+                    description,
+                    startDate,
+                    endDate,
+                    status
+                });
+            }
+
+            saveTasks();
+            closeTaskModal();
+        });
+
+        // --- Kanban Board Logic ---
+
+        function createTaskCard(task) {
+            const card = document.createElement('div');
+            card.id = `task-${task.id}`;
+            card.className = `kanban-task bg-gray-700 p-4 rounded-lg shadow-md border-t-4 ${getStatusColorClass(task.status)} cursor-grab flex flex-col space-y-2 relative`;
+            card.draggable = true;
+            card.dataset.taskId = task.id;
+            card.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <h4 class="text-lg font-semibold text-gray-100 pr-2">${task.title}</h4>
+                    <div class="text-xs text-gray-400 text-right flex-shrink-0">
+                        ${task.startDate ? `<span class="block">🗓️ ${formatDate(task.startDate)}</span>` : ''}
+                        ${task.endDate && task.startDate !== task.endDate ? `<span class="block">➡️ ${formatDate(task.endDate)}</span>` : ''}
+                    </div>
+                </div>
+                <p class="text-gray-300 text-sm flex-grow">${task.description || 'Sem descrição.'}</p>
+                <div class="flex justify-end space-x-2 mt-2">
+                    <button class="edit-task bg-gray-600 hover:bg-gray-500 text-white p-2 rounded-full transition-colors duration-200 btn-touch" data-id="${task.id}" aria-label="Editar tarefa ${task.title}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </button>
+                    <button class="delete-task bg-red-600 hover:bg-red-700 text-white p-2 rounded-full transition-colors duration-200 btn-touch" data-id="${task.id}" aria-label="Excluir tarefa ${task.title}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                </div>
+            `;
+            return card;
+        }
+
+        function renderKanbanBoard() {
+            const todoTasksDiv = document.getElementById('todo-tasks');
+            const inProgressTasksDiv = document.getElementById('in-progress-tasks');
+            const doneTasksDiv = document.getElementById('done-tasks');
+
+            todoTasksDiv.innerHTML = '';
+            inProgressTasksDiv.innerHTML = '';
+            doneTasksDiv.innerHTML = '';
+
+            let todoCount = 0, inProgressCount = 0, doneCount = 0;
+
+            tasks.sort((a, b) => new Date(a.startDate || '9999-12-31') - new Date(b.startDate || '9999-12-31')).forEach(task => {
+                const card = createTaskCard(task);
+                if (task.status === 'todo') {
+                    todoTasksDiv.appendChild(card);
+                    todoCount++;
+                } else if (task.status === 'in-progress') {
+                    inProgressTasksDiv.appendChild(card);
+                    inProgressCount++;
+                } else if (task.status === 'done') {
+                    doneTasksDiv.appendChild(card);
+                    doneCount++;
+                }
+            });
+
+            document.getElementById('todo-count').textContent = `(${todoCount})`;
+            document.getElementById('in-progress-count').textContent = `(${inProgressCount})`;
+            document.getElementById('done-count').textContent = `(${doneCount})`;
+
+            addKanbanEventListeners();
+        }
+
+        function addKanbanEventListeners() {
+            // Edit & Delete buttons
+            document.querySelectorAll('.edit-task').forEach(button => {
+                button.onclick = (e) => {
+                    const taskId = e.currentTarget.dataset.id;
+                    const task = tasks.find(t => t.id === taskId);
+                    if (task) openTaskModal(task);
+                };
+            });
+
+            document.querySelectorAll('.delete-task').forEach(button => {
+                button.onclick = (e) => {
+                    if (confirm('Tem certeza que deseja excluir esta tarefa?')) {
+                        const taskId = e.currentTarget.dataset.id;
+                        tasks = tasks.filter(t => t.id !== taskId);
+                        saveTasks();
+                    }
+                };
+            });
+
+            // Drag and Drop
+            const kanbanColumns = document.querySelectorAll('.kanban-column');
+            let draggedTask = null;
+
+            document.querySelectorAll('.kanban-task').forEach(taskCard => {
+                taskCard.addEventListener('dragstart', (e) => {
+                    draggedTask = e.target;
+                    e.target.classList.add('dragging');
+                    e.dataTransfer.setData('text/plain', e.target.dataset.taskId);
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+
+                taskCard.addEventListener('dragend', (e) => {
+                    e.target.classList.remove('dragging');
+                    draggedTask = null;
+                });
+            });
+
+            kanbanColumns.forEach(column => {
+                column.addEventListener('dragover', (e) => {
+                    e.preventDefault(); // Allows drop
+                    if (e.target.closest('.kanban-column')) {
+                        e.dataTransfer.dropEffect = 'move';
+                        // Add visual feedback to show where it will drop
+                        column.classList.add('border-orange-500'); // Assuming border-orange-500 is a good visual indicator
+                        column.classList.add('border-2'); // Add border if it's not already there
+                    }
+                });
+
+                column.addEventListener('dragleave', (e) => {
+                    e.target.closest('.kanban-column')?.classList.remove('border-orange-500', 'border-2');
+                });
+
+                column.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    column.classList.remove('border-orange-500', 'border-2');
+
+                    const taskId = e.dataTransfer.getData('text/plain');
+                    const newStatus = column.dataset.status;
+
+                    if (draggedTask && draggedTask.dataset.taskId === taskId) {
+                        const taskIndex = tasks.findIndex(t => t.id === taskId);
+                        if (taskIndex !== -1 && tasks[taskIndex].status !== newStatus) {
+                            tasks[taskIndex].status = newStatus;
+                            saveTasks();
+                        }
+                    }
+                });
+            });
+        }
+
+        // --- Calendar Logic ---
+
+        let currentCalendarDate = new Date();
+
+        const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+        function renderCalendar() {
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+
+            document.getElementById('current-month-year').textContent = `${monthNames[month]} ${year}`;
+
+            const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 = Sunday, 1 = Monday...
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            const calendarGrid = document.getElementById('calendar-grid');
+            calendarGrid.innerHTML = '';
+
+            // Fill leading empty days
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'p-2 text-gray-600 rounded-lg';
+                calendarGrid.appendChild(emptyDay);
+            }
+
+            // Fill days of the month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const tasksOnDay = tasks.filter(task => {
+                    // Check if the day is between startDate and endDate (inclusive)
+                    const start = task.startDate ? new Date(task.startDate + 'T00:00:00') : null;
+                    const end = task.endDate ? new Date(task.endDate + 'T00:00:00') : start; // If no end date, it's a single-day task
+                    const currentDay = new Date(dayString + 'T00:00:00');
+
+                    return start && currentDay >= start && currentDay <= end;
+                });
+
+                const dayElement = document.createElement('div');
+                dayElement.className = `p-2 text-center rounded-lg relative cursor-pointer btn-touch flex flex-col items-center justify-center`;
+                dayElement.classList.add('hover:bg-gray-700');
+
+                if (tasksOnDay.length > 0) {
+                    dayElement.classList.add('bg-orange-600', 'hover:bg-orange-700', 'text-white', 'font-bold');
+                    dayElement.title = tasksOnDay.map(t => t.title).join(', ');
+                    dayElement.innerHTML = `
+                        <span class="text-xl">${day}</span>
+                        <div class="flex flex-wrap justify-center space-x-1 mt-1">
+                            ${tasksOnDay.map(task => `<span class="w-2 h-2 rounded-full ${getGanttBarColorClass(task.status)}"></span>`).join('')}
+                        </div>
+                    `;
+                    dayElement.addEventListener('click', () => alert(`Tarefas em ${dayString}:\n${tasksOnDay.map(t => `- ${t.title}`).join('\n')}`));
+                } else {
+                    dayElement.classList.add('text-gray-200');
+                    dayElement.innerHTML = `<span class="text-xl">${day}</span>`;
+                }
+                calendarGrid.appendChild(dayElement);
+            }
+        }
+
+        document.getElementById('prev-month').addEventListener('click', () => {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
+            renderCalendar();
+        });
+
+        document.getElementById('next-month').addEventListener('click', () => {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
+            renderCalendar();
+        });
+
+
+        // --- Gantt Chart Logic ---
+
+        function renderGanttChart() {
+            const ganttContainer = document.getElementById('gantt-chart-container');
+            const ganttTasksList = document.getElementById('gantt-tasks-list');
+            ganttTasksList.innerHTML = '';
+
+            const today = new Date();
+            const viewStart = new Date(today.getFullYear(), today.getMonth() - 1, 1); // Start 1 month before current
+            const viewEnd = new Date(today.getFullYear(), today.getMonth() + 4, 0); // End 4 months from current (e.g., current month + 3 future months)
+
+            const monthsHeaderDiv = ganttContainer.querySelector('.grid-cols-4, .grid-cols-6, .grid-cols-12'); // Select based on responsive classes
+            monthsHeaderDiv.innerHTML = '';
+
+            let currentMonthIterator = new Date(viewStart.getFullYear(), viewStart.getMonth(), 1);
+            const ganttMonths = [];
+            while (currentMonthIterator <= viewEnd) {
+                ganttMonths.push(new Date(currentMonthIterator));
+                currentMonthIterator.setMonth(currentMonthIterator.getMonth() + 1);
+            }
+
+            // Adjust grid-cols dynamically based on number of months, or keep it fixed for simplicity and just scroll
+            // For now, let's keep it fixed and rely on overflow-x-auto for smaller screens.
+            // A more advanced solution would dynamically change grid-cols or use flex with specific widths.
+            const totalMonthsDisplay = ganttMonths.length;
+            // The default grid-cols for months header is 12, so if more or fewer months, adjust the width of each "month"
+            const monthColWidthPercent = 100 / totalMonthsDisplay;
+
+            ganttMonths.forEach(monthDate => {
+                const monthName = monthDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+                const monthHeader = document.createElement('div');
+                monthHeader.className = `min-w-[50px] border-l border-gray-700 text-xs font-medium uppercase py-1`;
+                monthHeader.textContent = monthName;
+                monthHeader.style.flexBasis = `${monthColWidthPercent}%`;
+                monthHeader.style.flexShrink = 0;
+                monthsHeaderDiv.appendChild(monthHeader);
+            });
+
+            // Make the monthsHeaderDiv a flex container for the dynamic widths
+            monthsHeaderDiv.classList.remove('grid');
+            monthsHeaderDiv.classList.add('flex', 'w-3/4'); // Match the width of the ganttBarContainer
+            monthsHeaderDiv.style.width = `calc(75% - 0px)`; // Account for potential gap or margin
+
+
+            tasks.sort((a, b) => new Date(a.startDate || '9999-12-31') - new Date(b.startDate || '9999-12-31'))
+                 .filter(task => task.startDate) // Only show tasks with a start date
+                 .forEach(task => {
+                const taskRow = document.createElement('div');
+                taskRow.className = 'flex items-center text-sm mb-2 relative';
+
+                const taskTitle = document.createElement('div');
+                taskTitle.className = 'w-1/4 min-w-[120px] pr-2 font-medium text-gray-200 truncate';
+                taskTitle.textContent = task.title;
+                taskTitle.title = task.title; // For hover tooltip
+
+                const ganttBarContainer = document.createElement('div');
+                ganttBarContainer.className = 'w-3/4 relative h-6';
+
+                if (task.startDate) {
+                    const bar = document.createElement('div');
+                    bar.className = `absolute h-4 rounded-md ${getGanttBarColorClass(task.status)} flex items-center justify-center text-xs text-white px-1`;
+                    bar.style.top = '50%';
+                    bar.style.transform = 'translateY(-50%)';
+
+                    const start = new Date(task.startDate + 'T00:00:00');
+                    const end = task.endDate ? new Date(task.endDate + 'T00:00:00') : start;
+                    end.setDate(end.getDate()); // Ensure end day is included
+
+                    // Calculate position and width relative to the visible gantt timeline
+                    const totalMsInView = viewEnd.getTime() - viewStart.getTime();
+                    const offsetMs = start.getTime() - viewStart.getTime();
+                    const durationMs = end.getTime() - start.getTime();
+
+                    const leftPercent = (offsetMs / totalMsInView) * 100;
+                    const widthPercent = (durationMs / totalMsInView) * 100;
+
+                    bar.style.left = `${Math.max(0, leftPercent)}%`;
+                    bar.style.width = `${Math.min(100 - leftPercent, widthPercent + (100 / totalMsInView))} %`; // Add a little buffer for single days
+                    if (widthPercent <= 0 && offsetMs >= 0 && offsetMs <= totalMsInView) bar.style.width = '1%'; // Ensure single-day tasks are visible
+
+                    bar.textContent = `${formatDate(task.startDate)}${task.endDate && task.startDate !== task.endDate ? ` - ${formatDate(task.endDate)}` : ''}`;
+                    if (bar.textContent.length > 15) bar.textContent = ''; // Hide text if too small
+                    ganttBarContainer.appendChild(bar);
+                }
+
+                taskRow.appendChild(taskTitle);
+                taskRow.appendChild(ganttBarContainer);
+                ganttTasksList.appendChild(taskRow);
+            });
+        }
+
+
+        // --- AI Assistant Logic ---
+
+        const aiInput = document.getElementById('ai-input');
+        const aiSendButton = document.getElementById('ai-send-button');
+        const aiConversation = document.getElementById('ai-conversation');
+
+        aiInput.addEventListener('input', () => {
+            aiInput.style.height = 'auto';
+            aiInput.style.height = Math.min(aiInput.scrollHeight, 150) + 'px'; // Max height 150px for input
+        });
+
+        aiSendButton.addEventListener('click', sendAiMessage);
+        aiInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendAiMessage();
+            }
+        });
+
+        function appendMessage(sender, message, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex items-start ${isUser ? 'justify-end' : ''}`;
+            messageDiv.innerHTML = `
+                ${!isUser ? `<img src="https://ui-avatars.com/api/?name=AI&background=ED8936&color=fff&size=32" alt="AI Avatar" class="w-8 h-8 rounded-full mr-3 flex-shrink-0">` : ''}
+                <div class="${isUser ? 'bg-orange-600' : 'bg-gray-700'} p-3 rounded-lg max-w-[80%] text-gray-200">
+                    ${message}
+                </div>
+                ${isUser ? `<img src="https://ui-avatars.com/api/?name=Você&background=4A5568&color=fff&size=32" alt="User Avatar" class="w-8 h-8 rounded-full ml-3 flex-shrink-0">` : ''}
+            `;
+            aiConversation.appendChild(messageDiv);
+            aiConversation.scrollTop = aiConversation.scrollHeight; // Scroll to bottom
+        }
+
+        async function sendAiMessage() {
+            const message = aiInput.value.trim();
+            if (!message) return;
+
+            appendMessage('user', message, true);
+            aiInput.value = '';
+            aiInput.style.height = 'auto'; // Reset height
+
+            // Simulate AI response
+            const lowerCaseMessage = message.toLowerCase();
+            let aiResponse = "Desculpe, não entendi o comando. Tente algo como 'criar tarefa', 'mostrar tarefas', 'editar tarefa [ID]', 'excluir tarefa [ID]', 'mover tarefa [ID] para [status]'.";
+
+            if (lowerCaseMessage.includes('olá') || lowerCaseMessage.includes('oi')) {
+                aiResponse = "Olá! Como posso ajudar com suas tarefas hoje?";
+            } else if (lowerCaseMessage.includes('criar tarefa')) {
+                const titleMatch = message.match(/título:\s*(.+?)(?:\s+descrição:|$)/i);
+                const descMatch = message.match(/descrição:\s*(.+?)(?:\s+data de início:|$)/i);
+                const startMatch = message.match(/data de início:\s*(\d{4}-\d{2}-\d{2})/i);
+                const endMatch = message.match(/data de término:\s*(\d{4}-\d{2}-\d{2})/i);
+                const statusMatch = message.match(/status:\s*(todo|in-progress|done)/i);
+
+                const newTask = {
+                    id: generateUniqueId(),
+                    title: titleMatch ? titleMatch[1].trim() : `Nova Tarefa ${tasks.length + 1}`,
+                    description: descMatch ? descMatch[1].trim() : '',
+                    startDate: startMatch ? startMatch[1] : '',
+                    endDate: endMatch ? endMatch[1] : '',
+                    status: statusMatch ? statusMatch[1].toLowerCase() : 'todo'
+                };
+                tasks.push(newTask);
+                saveTasks();
+                aiResponse = `Tarefa "${newTask.title}" criada com sucesso! ID: ${newTask.id.substring(0, 6)}...`;
+            } else if (lowerCaseMessage.includes('mostrar tarefas')) {
+                if (tasks.length === 0) {
+                    aiResponse = "Você não tem nenhuma tarefa no momento.";
+                } else {
+                    let taskListHtml = tasks.map(task => {
+                        const statusText = task.status.replace('-', ' ');
+                        return `- <strong>${task.title}</strong> (ID: ${task.id.substring(0, 6)}..., Status: ${statusText.charAt(0).toUpperCase() + statusText.slice(1)}, Início: ${formatDate(task.startDate)}, Fim: ${formatDate(task.endDate)})`;
+                    }).join('<br/>');
+                    aiResponse = `Suas tarefas:<br/>${taskListHtml}`;
+                }
+            } else if (lowerCaseMessage.includes('editar tarefa')) {
+                const idMatch = message.match(/editar tarefa\s*([a-z0-9]+)/i);
+                const taskId = idMatch ? idMatch[1] : null;
+                const task = tasks.find(t => taskId && t.id.startsWith(taskId)); // Match partial ID
+
+                if (task) {
+                    const titleMatch = message.match(/título:\s*(.+?)(?:\s+(?:descrição|data de início|data de término|status):|$)/i);
+                    const descMatch = message.match(/descrição:\s*(.+?)(?:\s+(?:data de início|data de término|status):|$)/i);
+                    const startMatch = message.match(/data de início:\s*(\d{4}-\d{2}-\d{2})/i);
+                    const endMatch = message.match(/data de término:\s*(\d{4}-\d{2}-\d{2})/i);
+                    const statusMatch = message.match(/status:\s*(todo|in-progress|done)/i);
+
+                    let updated = false;
+                    if (titleMatch) { task.title = titleMatch[1].trim(); updated = true; }
+                    if (descMatch) { task.description = descMatch[1].trim(); updated = true; }
+                    if (startMatch) { task.startDate = startMatch[1]; updated = true; }
+                    if (endMatch) { task.endDate = endMatch[1]; updated = true; }
+                    if (statusMatch) { task.status = statusMatch[1].toLowerCase(); updated = true; }
+
+                    if (updated) {
+                        saveTasks();
+                        aiResponse = `Tarefa "<strong>${task.title}</strong>" (ID: ${task.id.substring(0, 6)}...) atualizada com sucesso.`;
+                    } else {
+                        aiResponse = "Nenhuma alteração detectada para a tarefa. Por favor, especifique o que deseja editar (título, descrição, data de início, data de término, status).";
+                    }
+                } else {
+                    aiResponse = "Não consegui encontrar a tarefa com esse ID. Por favor, forneça um ID de tarefa válido.";
+                }
+            } else if (lowerCaseMessage.includes('excluir tarefa')) {
+                const idMatch = message.match(/excluir tarefa\s*([a-z0-9]+)/i);
+                const taskId = idMatch ? idMatch[1] : null;
+                const initialLength = tasks.length;
+                tasks = tasks.filter(t => !taskId || !t.id.startsWith(taskId)); // Match partial ID
+
+                if (tasks.length < initialLength) {
+                    saveTasks();
+                    aiResponse = `Tarefa(s) com ID ${taskId}... excluída(s) com sucesso.`;
+                } else {
+                    aiResponse = "Não consegui encontrar a tarefa com esse ID para exclusão.";
+                }
+            } else if (lowerCaseMessage.includes('mover tarefa')) {
+                const idMatch = message.match(/mover tarefa\s*([a-z0-9]+)/i);
+                const statusMatch = message.match(/para\s*(a fazer|em andamento|concluído|todo|in-progress|done)/i);
+                const taskId = idMatch ? idMatch[1] : null;
+                let newStatus = null;
+                if (statusMatch) {
+                    const statusText = statusMatch[1].toLowerCase();
+                    if (statusText === 'a fazer') newStatus = 'todo';
+                    else if (statusText === 'em andamento') newStatus = 'in-progress';
+                    else if (statusText === 'concluído') newStatus = 'done';
+                    else newStatus = statusText;
+                }
+
+                const task = tasks.find(t => taskId && t.id.startsWith(taskId));
+
+                if (task && newStatus) {
+                    task.status = newStatus;
+                    saveTasks();
+                    aiResponse = `Tarefa "<strong>${task.title}</strong>" (ID: ${task.id.substring(0, 6)}...) movida para "<strong>${newStatus.replace('-', ' ').toUpperCase()}</strong>".`;
+                } else {
+                    aiResponse = "Não consegui mover a tarefa. Verifique o ID e o novo status (a fazer, em andamento, concluído).";
+                }
+            }
+
+
+            setTimeout(() => {
+                appendMessage('ai', aiResponse, false);
+            }, 1000); // Simulate AI thinking time
+        }
+    </script>
+</body>
+</html>

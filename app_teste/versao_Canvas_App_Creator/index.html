@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Planner Inteligente: Organize suas tarefas, projetos e compromissos com Kanban, calendário, Gantt e assistente de IA.">
+  <meta name="keywords" content="planner, kanban, calendário, gantt, assistente IA, tarefas, projetos, compromissos">
+  <meta name="author" content="Seu Nome">
+
+  <meta property="og:title" content="Planner Inteligente">
+  <meta property="og:description" content="Organize suas tarefas, projetos e compromissos com Kanban, calendário, Gantt e assistente de IA.">
+  <meta property="og:image" content="/img/planner-inteligente-preview.png">
+  <meta property="og:url" content="https://seu-dominio.com/planner-inteligente">
+  <meta property="og:type" content="website">
+
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="preload" href="/css/style.css" as="style">
+  <link rel="stylesheet" href="/css/style.css">
+
+  <title>Planner Inteligente</title>
+  <style>
+    /* Estilos CSS - Inline para Critical Rendering Path */
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      background-color: #f4f4f4;
+      color: #333;
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header,
+    footer {
+      background-color: #333;
+      color: #fff;
+      text-align: center;
+      padding: 1em 0;
+    }
+
+    nav {
+      background-color: #444;
+    }
+
+    nav ul {
+      padding: 0;
+      margin: 0;
+      list-style: none;
+      display: flex;
+      justify-content: center;
+    }
+
+    nav a {
+      display: block;
+      color: #fff;
+      text-decoration: none;
+      padding: 1em;
+    }
+
+    nav a:hover {
+      background-color: #555;
+    }
+
+    main {
+      padding: 20px;
+      flex: 1;
+      /* Preenche o espaço restante */
+    }
+
+    /* Estilos do Kanban */
+    .kanban-container {
+      display: flex;
+      overflow-x: auto;
+      margin-bottom: 20px;
+    }
+
+    .kanban-column {
+      background-color: #eee;
+      border: 1px solid #ccc;
+      min-width: 300px;
+      margin-right: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      flex: 0 0 auto;
+    }
+
+    .kanban-column h2 {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    .kanban-item {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      cursor: grab;
+    }
+
+    /* Estilos do Calendário */
+    #calendar {
+      width: 100%;
+      margin-bottom: 20px;
+    }
+
+    /* Estilos do Gráfico de Gantt */
+    #gantt_chart {
+      width: 100%;
+      height: 300px;
+      border: 1px solid #ccc;
+    }
+
+    /* Estilos do Assistente de IA */
+    #ai-assistant {
+      background-color: #f9f9f9;
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 5px;
+    }
+
+    #ai-assistant textarea {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 5px;
+    }
+
+    #ai-response {
+      border: 1px solid #eee;
+      padding: 10px;
+      margin-top: 10px;
+      background-color: #fff;
+    }
+
+    /* Responsividade */
+    @media (max-width: 768px) {
+      .kanban-container {
+        flex-direction: column;
+      }
+
+      .kanban-column {
+        margin-right: 0;
+        margin-bottom: 10px;
+        width: 100%;
+      }
+
+      nav ul {
+        flex-direction: column;
+        text-align: center;
+      }
+    }
+
+    /* Acessibilidade */
+    a:focus,
+    button:focus,
+    input:focus,
+    textarea:focus {
+      outline: 2px solid #007bff;
+    }
+  </style>
+</head>
+
+<body>
+  <a href="#main-content" class="skip-link">Pular para o conteúdo principal</a>
+
+  <header>
+    <h1>Planner Inteligente</h1>
+    <p>Organize suas tarefas, projetos e compromissos com facilidade.</p>
+  </header>
+
+  <nav>
+    <ul>
+      <li><a href="#kanban">Kanban</a></li>
+      <li><a href="#calendar">Calendário</a></li>
+      <li><a href="#gantt">Gantt</a></li>
+      <li><a href="#ai">Assistente de IA</a></li>
+    </ul>
+  </nav>
+
+  <main id="main-content">
+
+    <section id="kanban">
+      <h2>Kanban Board</h2>
+      <div class="kanban-container">
+        <div class="kanban-column" id="kanban-todo">
+          <h2>A Fazer</h2>
+          <div class="kanban-item" draggable="true">Tarefa 1</div>
+          <div class="kanban-item" draggable="true">Tarefa 2</div>
+        </div>
+        <div class="kanban-column" id="kanban-inprogress">
+          <h2>Em Progresso</h2>
+          <div class="kanban-item" draggable="true">Tarefa 3</div>
+        </div>
+        <div class="kanban-column" id="kanban-done">
+          <h2>Concluído</h2>
+          <div class="kanban-item" draggable="true">Tarefa 4</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="calendar">
+      <h2>Calendário</h2>
+      <div id="calendar">
+        <!--  Implementação do calendário aqui (JavaScript) -->
+      </div>
+    </section>
+
+    <section id="gantt">
+      <h2>Gráfico de Gantt</h2>
+      <div id="gantt_chart">
+        <!-- Implementação do Gráfico de Gantt aqui (JavaScript) -->
+      </div>
+    </section>
+
+    <section id="ai">
+      <h2>Assistente de IA</h2>
+      <div id="ai-assistant">
+        <textarea id="ai-input" placeholder="Pergunte sobre suas tarefas, projetos ou compromissos..."></textarea>
+        <button id="ai-submit">Enviar</button>
+        <div id="ai-response">
+          <!-- Resposta do Assistente de IA aqui -->
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>&copy; 2024 Planner Inteligente. Todos os direitos reservados.</p>
+  </footer>
+
+  <script>
+    // Script JavaScript para funcionalidades (Kanban, Calendário, Gantt, AI)
+    // (Este é um exemplo básico e precisa de implementação completa)
+
+    // Kanban Drag and Drop
+    const kanbanItems = document.querySelectorAll('.kanban-item');
+    const kanbanColumns = document.querySelectorAll('.kanban-column');
+
+    kanbanItems.forEach(item => {
+      item.addEventListener('dragstart', dragStart);
+    });
+
+    kanbanColumns.forEach(column => {
+      column.addEventListener('dragover', dragOver);
+      column.addEventListener('drop', drop);
+    });
+
+    function dragStart(event) {
+      event.dataTransfer.setData('text/plain', event.target.id);
+    }
+
+    function dragOver(event) {
+      event.preventDefault();
+    }
+
+    function drop(event) {
+      event.preventDefault();
+      const id = event.dataTransfer.getData('text/plain');
+      const draggable = document.getElementById(id);
+      if (draggable) { // Check if draggable exists before appending
+        event.target.appendChild(draggable);
+      }
+    }
+
+    // Resto das implementações do Calendário, Gantt e Assistente de IA aqui
+    // (requerem bibliotecas externas e lógica de backend para IA)
+  </script>
+</body>
+
+</html>

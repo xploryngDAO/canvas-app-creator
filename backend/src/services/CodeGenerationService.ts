@@ -44,7 +44,7 @@ export class CodeGenerationService {
 
       // Get selected model from settings
       const modelSetting = await this.settingsService.getSetting('geminiModel');
-      const selectedModel = modelSetting ? modelSetting.value : 'gemini-1.5-flash-002';
+      const selectedModel = modelSetting ? modelSetting.value : 'gemini-2.5-flash';
       const API_BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`;
 
       console.log('🔍 [DEBUG] CodeGenerationService - Usando modelo:', {
@@ -55,6 +55,19 @@ export class CodeGenerationService {
 
       const systemPrompt = this.buildSystemPrompt(request);
       const userPrompt = this.buildUserPrompt(request);
+
+      console.log('🎯 [CONFIG] Configurações aplicadas:', {
+        modelo: selectedModel,
+        tipo: request.appType,
+        frontend: request.frontendStack,
+        css: request.cssFramework,
+        tema: request.colorTheme,
+        fonte: request.mainFont,
+        layout: request.layoutStyle,
+        auth: request.enableAuth,
+        database: request.enableDatabase,
+        payments: request.enablePayments
+      });
 
       const logs = [
         '🤖 Conectando com Gemini AI...',
@@ -163,66 +176,197 @@ export class CodeGenerationService {
       }
     };
 
-    // Configuração dinâmica do Frontend Stack
-    const getFrontendStackInstructions = () => {
-      switch (request.frontendStack.toLowerCase()) {
-        case 'react':
-          return {
-            structure: 'componentes React funcionais com JSX',
-            output: 'Retorne APENAS o código JSX dos componentes principais, sem explicações',
-            javascript: 'Use React hooks (useState, useEffect) conforme necessário',
-            includes: '- Inclua imports necessários do React'
-          };
-        case 'vue':
-          return {
-            structure: 'componentes Vue 3 com Composition API',
-            output: 'Retorne APENAS o código Vue SFC (Single File Component), sem explicações',
-            javascript: 'Use Vue 3 Composition API (ref, reactive, computed) conforme necessário',
-            includes: '- Inclua imports necessários do Vue'
-          };
-        case 'angular':
-          return {
-            structure: 'componentes Angular com TypeScript',
-            output: 'Retorne APENAS o código Angular (component.ts e template), sem explicações',
-            javascript: 'Use Angular services e dependency injection conforme necessário',
-            includes: '- Inclua imports necessários do Angular'
-          };
-        case 'html-vanilla':
-          return {
-            structure: 'HTML completo com CSS e JavaScript vanilla',
-            output: 'Retorne APENAS o código HTML completo com CSS inline ou externo e JavaScript vanilla, sem explicações',
-            javascript: 'Use JavaScript vanilla puro (sem frameworks) - pode ser inline no HTML ou em tags <script>',
-            includes: '- Inclua meta viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">\n- Use HTML5 semântico\n- CSS pode ser inline no <style> ou externo\n- JavaScript vanilla para interatividade'
-          };
-        case 'html':
-        case 'vanilla':
-        default:
-          return {
-            structure: 'HTML completo com JavaScript vanilla',
-            output: 'Retorne APENAS o código HTML completo, sem explicações',
-            javascript: 'Inclua JavaScript inline no HTML',
-            includes: '- Inclua meta viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">'
-          };
-      }
+    const cssConfig = getCssFrameworkInstructions();
+
+    // Templates específicos para componentes funcionais
+    const getComponentTemplates = () => {
+      const templates = {
+        kanban: `
+// TEMPLATE KANBAN FUNCIONAL:
+const kanbanData = JSON.parse(localStorage.getItem('kanbanData')) || {
+  todo: [], inProgress: [], done: []
+};
+
+function createTask(title, description, column = 'todo') {
+  const task = {
+    id: Date.now(),
+    title,
+    description,
+    column,
+    createdAt: new Date().toISOString()
+  };
+  kanbanData[column].push(task);
+  saveKanban();
+  renderKanban();
+}
+
+function moveTask(taskId, fromColumn, toColumn) {
+  const taskIndex = kanbanData[fromColumn].findIndex(t => t.id == taskId);
+  if (taskIndex > -1) {
+    const task = kanbanData[fromColumn].splice(taskIndex, 1)[0];
+    task.column = toColumn;
+    kanbanData[toColumn].push(task);
+    saveKanban();
+    renderKanban();
+  }
+}
+
+function saveKanban() {
+  localStorage.setItem('kanbanData', JSON.stringify(kanbanData));
+}`,
+
+        calendar: `
+// TEMPLATE CALENDÁRIO FUNCIONAL:
+const calendarData = JSON.parse(localStorage.getItem('calendarData')) || {};
+
+function addEvent(date, title, description) {
+  if (!calendarData[date]) calendarData[date] = [];
+  calendarData[date].push({
+    id: Date.now(),
+    title,
+    description,
+    time: new Date().toLocaleTimeString()
+  });
+  saveCalendar();
+  renderCalendar();
+}
+
+function saveCalendar() {
+  localStorage.setItem('calendarData', JSON.stringify(calendarData));
+}
+
+function renderCalendar() {
+  // Implementar renderização do calendário
+}`,
+
+        assistant: `
+// TEMPLATE ASSISTENTE IA FUNCIONAL:
+const chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
+
+function sendMessage(message) {
+  const userMessage = {
+    id: Date.now(),
+    type: 'user',
+    content: message,
+    timestamp: new Date().toISOString()
+  };
+  
+  chatHistory.push(userMessage);
+  
+  // Simular resposta da IA
+  setTimeout(() => {
+    const aiResponse = {
+      id: Date.now() + 1,
+      type: 'assistant',
+      content: generateAIResponse(message),
+      timestamp: new Date().toISOString()
+    };
+    chatHistory.push(aiResponse);
+    saveChatHistory();
+    renderChat();
+  }, 1000);
+  
+  saveChatHistory();
+  renderChat();
+}
+
+function generateAIResponse(message) {
+  // Lógica de resposta baseada em palavras-chave
+  if (message.toLowerCase().includes('criar')) return 'Vou ajudar você a criar isso!';
+  if (message.toLowerCase().includes('editar')) return 'Claro, vamos editar juntos!';
+  return 'Entendi! Como posso ajudar mais?';
+}
+
+function saveChatHistory() {
+  localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+}`
+      };
+      
+      return templates;
     };
 
-    const cssConfig = getCssFrameworkInstructions();
-    const frontendConfig = getFrontendStackInstructions();
+    const componentTemplates = getComponentTemplates();
 
-    return `Você é um desenvolvedor web especialista. Crie um aplicativo web completo usando ${frontendConfig.structure} com ABORDAGEM MOBILE-FIRST.
+    return `Você é um desenvolvedor web especialista. Crie um aplicativo web completo em UM ÚNICO ARQUIVO HTML com ABORDAGEM MOBILE-FIRST.
 
-INSTRUÇÕES IMPORTANTES:
-- ${frontendConfig.output}
+🚨 REGRAS OBRIGATÓRIAS - ARQUIVO ÚNICO:
+- RETORNE APENAS UM ARQUIVO HTML COMPLETO E FUNCIONAL
+- TODO CSS deve estar INLINE dentro de tags <style> no <head>
+- TODO JavaScript deve estar INLINE dentro de tags <script> no final do <body>
+- NÃO crie arquivos separados (.css, .js, .json, etc.)
+- NÃO use imports ou links para arquivos externos (exceto CDNs)
+- O arquivo deve ser 100% autossuficiente e funcionar offline
+
+🎯 ESTRUTURA OBRIGATÓRIA DO HTML:
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[Nome do App]</title>
+    ${cssConfig.framework === 'Tailwind CSS via CDN' ? '<script src="https://cdn.tailwindcss.com"></script>' : ''}
+    <style>
+        /* TODO CSS CUSTOMIZADO AQUI - INLINE */
+        /* Inclua estilos para scrollbar, animações, hover, etc. */
+        :root {
+          --primary-color: #3b82f6;
+          --secondary-color: #64748b;
+          --success-color: #10b981;
+          --warning-color: #f59e0b;
+          --error-color: #ef4444;
+        }
+        
+        .drag-over { border: 2px dashed var(--primary-color); }
+        .task-card { transition: all 0.3s ease; }
+        .task-card:hover { transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+    <!-- TODO HTML ESTRUTURAL AQUI -->
+    
+    <script>
+        /* TODO JAVASCRIPT FUNCIONAL AQUI - INLINE */
+        /* Use os templates abaixo como referência: */
+        
+        ${componentTemplates.kanban}
+        
+        ${componentTemplates.calendar}
+        
+        ${componentTemplates.assistant}
+        
+        // Inicialização do app
+        document.addEventListener('DOMContentLoaded', function() {
+          // Inicializar componentes
+          initializeApp();
+        });
+    </script>
+</body>
+</html>
+
+📱 INSTRUÇÕES MOBILE-FIRST:
 - ${cssConfig.instructions}
-- ${frontendConfig.javascript}
-- OBRIGATÓRIO: Design MOBILE-FIRST com 100% de responsividade
 - ${cssConfig.classes}
-- ${frontendConfig.includes}
+- Design MOBILE-FIRST com 100% de responsividade
 - Elementos touch-friendly (mínimo 44px de altura para botões)
 - Layout flexível que funciona em todas as telas (320px+)
 - Teste mental em: mobile (320px), tablet (768px), desktop (1024px+)
 - Priorize experiência mobile, depois adapte para telas maiores
-- Garanta que o código seja funcional e completamente responsivo
+
+⚡ FUNCIONALIDADES OBRIGATÓRIAS:
+- Interface completamente funcional e interativa
+- Persistência de dados com localStorage (USE OS TEMPLATES ACIMA)
+- Animações suaves e transições CSS
+- Componentes drag & drop se aplicável (USE TEMPLATE KANBAN)
+- Validação de formulários
+- Estados de loading e feedback visual
+- Tratamento de erros
+
+🎨 QUALIDADE DE CÓDIGO:
+- Código limpo, organizado e comentado
+- Variáveis CSS customizadas para cores e espaçamentos
+- JavaScript modular com funções bem definidas
+- Semântica HTML5 adequada
+- Acessibilidade básica (aria-labels, alt texts)
 
 CONFIGURAÇÕES DO PROJETO:
 - Tipo: ${request.appType}
@@ -240,19 +384,50 @@ APLICAÇÃO DAS CONFIGURAÇÕES:
 - Use a fonte ${request.mainFont} como fonte principal
 - Implemente o estilo de layout ${request.layoutStyle}
 
-${request.enableAuth ? '- Inclua sistema básico de login/registro' : ''}
+${request.enableAuth ? '- Inclua sistema básico de login/registro com localStorage' : ''}
 ${request.enableDatabase ? '- Simule operações de banco de dados com localStorage' : ''}
-${request.enablePayments ? '- Inclua interface de pagamento simulada' : ''}`;
+${request.enablePayments ? '- Inclua interface de pagamento simulada' : ''}
+
+🔥 IMPORTANTE: Retorne APENAS o código HTML completo, sem explicações, comentários externos ou markdown. O arquivo deve ser executável imediatamente.`;
   }
 
   private buildUserPrompt(request: CodeGenerationRequest): string {
-    let prompt = `Crie um ${request.appType} completo e funcional`;
-    
-    if (request.customPrompt) {
-      prompt += ` com as seguintes especificações: ${request.customPrompt}`;
-    }
-    
-    prompt += `. Garanta que seja totalmente responsivo e siga as configurações especificadas no prompt do sistema.`;
+    // Prompt melhorado baseado no index_sqlite.html para gerar código de alta qualidade
+    let prompt = `Crie um app web ${request.appType} chamado "${request.projectId}": ${request.customPrompt || 'aplicativo funcional'}.
+
+🎯 REQUISITOS ESPECÍFICOS:
+- Gere um aplicativo COMPLETO e FUNCIONAL em um único arquivo HTML
+- Inclua TODAS as funcionalidades solicitadas (não apenas a estrutura)
+- Use ${request.cssFramework} para estilização
+- Implemente JavaScript vanilla para toda interatividade
+- Garanta persistência de dados com localStorage
+- Adicione animações e transições suaves
+- Interface responsiva e mobile-first
+
+📋 FUNCIONALIDADES OBRIGATÓRIAS:
+- Navegação funcional entre seções
+- Formulários com validação
+- Estados de loading e feedback visual
+- Drag & drop se aplicável
+- Modais e popups funcionais
+- Persistência de dados local
+- Tratamento de erros
+
+🎨 QUALIDADE VISUAL:
+- Design moderno e profissional
+- Cores harmoniosas e consistentes
+- Tipografia legível e hierárquica
+- Espaçamentos adequados
+- Ícones e elementos visuais
+- Animações sutis e elegantes
+
+⚡ PERFORMANCE:
+- Código otimizado e limpo
+- Carregamento rápido
+- Responsividade fluida
+- Compatibilidade cross-browser
+
+IMPORTANTE: Retorne APENAS o código HTML completo, sem explicações ou markdown. O arquivo deve funcionar perfeitamente quando aberto no navegador.`;
     
     return prompt;
   }
@@ -294,8 +469,87 @@ ${request.enablePayments ? '- Inclua interface de pagamento simulada' : ''}`;
     console.log('🔍 [DEBUG] Verificando viewport meta...');
     cleanedCode = this.ensureViewportMeta(cleanedCode);
     
+    // Validação Mobile-First
+    console.log('🔍 [DEBUG] Executando validação mobile-first...');
+    this.validateMobileFirst(cleanedCode);
+    
     console.log('🔍 [DEBUG] Código final processado (primeiros 200 chars):', cleanedCode.slice(0, 200));
     return cleanedCode;
+  }
+
+  private validateMobileFirst(code: string): void {
+    const validations = [];
+    let score = 0;
+    const maxScore = 10;
+    
+    // 1. Verificar meta viewport (2 pontos)
+    if (!code.includes('viewport')) {
+      validations.push('❌ Meta viewport ausente');
+    } else {
+      validations.push('✅ Meta viewport presente');
+      score += 2;
+    }
+    
+    // 2. Verificar classes responsivas (2 pontos)
+    const responsiveClasses = ['sm:', 'md:', 'lg:', 'xl:', '@media'];
+    const hasResponsive = responsiveClasses.some(cls => code.includes(cls));
+    if (hasResponsive) {
+      validations.push('✅ Classes responsivas detectadas');
+      score += 2;
+    } else {
+      validations.push('⚠️ Poucas classes responsivas detectadas');
+    }
+    
+    // 3. Verificar elementos touch-friendly (2 pontos)
+    const touchFriendlyPatterns = ['44px', 'h-11', 'h-12', 'py-3', 'py-4', 'min-h-', 'touch-manipulation'];
+    const hasTouchFriendly = touchFriendlyPatterns.some(pattern => code.includes(pattern));
+    if (hasTouchFriendly) {
+      validations.push('✅ Elementos touch-friendly detectados');
+      score += 2;
+    } else {
+      validations.push('⚠️ Verificar se elementos são touch-friendly (≥44px)');
+    }
+    
+    // 4. Verificar JavaScript funcional (2 pontos)
+    const jsPatterns = ['addEventListener', 'localStorage', 'querySelector', 'function'];
+    const hasJS = jsPatterns.some(pattern => code.includes(pattern));
+    if (hasJS) {
+      validations.push('✅ JavaScript funcional detectado');
+      score += 2;
+    } else {
+      validations.push('⚠️ JavaScript funcional limitado');
+    }
+    
+    // 5. Verificar estrutura HTML5 semântica (1 ponto)
+    const semanticTags = ['<nav>', '<main>', '<section>', '<article>', '<header>', '<footer>'];
+    const hasSemantic = semanticTags.some(tag => code.includes(tag));
+    if (hasSemantic) {
+      validations.push('✅ HTML5 semântico');
+      score += 1;
+    } else {
+      validations.push('⚠️ Melhorar semântica HTML5');
+    }
+    
+    // 6. Verificar CSS inline/interno (1 ponto)
+    if (code.includes('<style>') || code.includes('style=')) {
+      validations.push('✅ CSS inline/interno presente');
+      score += 1;
+    } else {
+      validations.push('⚠️ CSS inline/interno ausente');
+    }
+    
+    const percentage = Math.round((score / maxScore) * 100);
+    const quality = percentage >= 80 ? '🟢 EXCELENTE' : 
+                   percentage >= 60 ? '🟡 BOM' : 
+                   percentage >= 40 ? '🟠 REGULAR' : '🔴 PRECISA MELHORAR';
+    
+    console.log(`📱 [MOBILE-FIRST VALIDATION] Score: ${score}/${maxScore} (${percentage}%) - ${quality}`);
+    console.log('📋 [DETALHES]:', validations.join(' | '));
+    
+    // Log adicional para debugging
+    if (percentage < 60) {
+      console.log('⚠️ [ALERTA] Qualidade abaixo do esperado. Considere melhorar os prompts.');
+    }
   }
 
   private fixUnsplashImages(code: string): string {
@@ -357,28 +611,15 @@ ${request.enablePayments ? '- Inclua interface de pagamento simulada' : ''}`;
   private extractFiles(code: string, request: CodeGenerationRequest): GeneratedFile[] {
     const files: GeneratedFile[] = [];
     
-    // Main HTML file
+    // APENAS o arquivo HTML principal - arquivo único conforme especificado
     files.push({
       path: 'index.html',
       content: code,
       type: 'html'
     });
 
-    // Generate package.json if needed
-    if (request.frontendStack !== 'vanilla') {
-      files.push({
-        path: 'package.json',
-        content: this.generatePackageJson(request),
-        type: 'json'
-      });
-    }
-
-    // Generate README.md
-    files.push({
-      path: 'README.md',
-      content: this.generateReadme(request),
-      type: 'md'
-    });
+    // Não gerar arquivos adicionais para manter o conceito de arquivo único
+    // O objetivo é ter tudo em um único index.html funcional
 
     return files;
   }

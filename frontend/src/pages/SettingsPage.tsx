@@ -25,7 +25,7 @@ const SettingsPage: React.FC = () => {
   const [isTestingApi, setIsTestingApi] = useState(false);
   
   const [settings, setSettings] = useState({
-    geminiApiKey: 'AIzaSyAkXAZWO3f6yKV-a0qM_c4G2s6Yztj8kjg',
+    geminiApiKey: '',
     geminiModel: 'gemini-2.5-flash',
     defaultAppType: 'landing-page',
     defaultFrontendStack: 'React',
@@ -94,7 +94,7 @@ const SettingsPage: React.FC = () => {
 
       setSettings({
         geminiApiKey: getValue(0, '') as string,
-        geminiModel: getValue(1, 'gemini-1.5-flash-002') as string,
+        geminiModel: getValue(1, 'gemini-2.5-flash') as string,
         defaultAppType: getValue(2, 'landing-page') as string,
         defaultFrontendStack: getValue(3, 'React') as string,
         defaultCssFramework: getValue(4, 'TailwindCSS') as string,
@@ -316,9 +316,11 @@ const SettingsPage: React.FC = () => {
                     onChange={(e) => handleInputChange('geminiModel', e.target.value)}
                     className="text-sm"
                     options={[
-                      { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash Experimental (Free Tier) ⚡" },
-                      { value: "gemini-1.5-flash-002", label: "Gemini 1.5 Flash 002 (Free Tier) ⚡" },
-                      { value: "gemini-1.5-pro-002", label: "Gemini 1.5 Pro 002 (Paid) 💎" }
+                      { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Recomendado) ⚡" },
+                      { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro (Premium) 💎" },
+                      { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash Experimental ⚡" },
+                      { value: "gemini-1.5-flash-002", label: "Gemini 1.5 Flash 002 ⚡" },
+                      { value: "gemini-1.5-pro-002", label: "Gemini 1.5 Pro 002 💎" }
                     ]}
                   />
                   <p className="text-xs text-gray-400 mt-1">

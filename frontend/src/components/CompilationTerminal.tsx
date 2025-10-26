@@ -7,6 +7,7 @@ interface CompilationTerminalProps {
   onComplete: (code: string) => void;
   onError: (error: string) => void;
   isModifying?: boolean;
+  customPrompt?: string;
 }
 
 interface CompilationStep {
@@ -21,7 +22,8 @@ const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
   appConfig,
   onComplete,
   onError,
-  isModifying = false
+  isModifying = false,
+  customPrompt
 }) => {
   const [isCompiling, setIsCompiling] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -127,7 +129,7 @@ const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
       
       addTerminalLine('🚀 Enviando configuração para Gemini...');
       console.log(`🚀 [MAIN_TERMINAL] Iniciando chamada à API Gemini para: ${operationId}`);
-      const response = await geminiService.generateApp(config);
+      const response = await geminiService.generateApp(config, customPrompt);
       
       console.log(`✅ [MAIN_TERMINAL] Resposta recebida da API Gemini para: ${operationId}`, {
         success: response.success,

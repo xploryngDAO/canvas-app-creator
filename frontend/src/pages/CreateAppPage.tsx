@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ArrowLeft, Settings } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,6 +14,7 @@ import { projectService, CreateProjectRequest } from '@/services/projectService'
 import { AppConfig } from '@/types/app';
 import { database } from '@/services/database';
 import { geminiService } from '@/services/gemini';
+import { settingsService } from '@/services/settingsService';
 
 // Mapeamento de opções de layout por plataforma
 const LAYOUT_OPTIONS_BY_PLATFORM = {
@@ -810,6 +811,18 @@ const CreateAppPage: React.FC = () => {
     integrations: {} // Para armazenar integrações selecionadas e suas API keys
   });
 
+  // Nova variável de estado para preview das configurações padrão
+  const [defaultSettingsPreview, setDefaultSettingsPreview] = useState({
+    appType: 'Landing Page',
+    frontendStack: 'React',
+    cssFramework: 'TailwindCSS',
+    colorTheme: 'blue-professional',
+    mainFont: 'Inter',
+    layoutStyle: 'modern',
+    menuStructure: 'header-footer',
+    customLayoutElements: []
+  });
+
   const [isCreating, setIsCreating] = useState(false);
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   
@@ -823,13 +836,129 @@ const CreateAppPage: React.FC = () => {
   const [servicesInitialized, setServicesInitialized] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
 
-  // Inicializar serviços
+  // Auto-fill prompt based on form data using useMemo to prevent infinite re-renders
+  const generatedPromptMemo = useMemo(() => {
+    const { 
+      name, description, appType, frontendStack, cssFramework, colorTheme, 
+      mainFont, layoutStyle, enableAuth, authType, adminUsername, adminPassword,
+      databaseType, paymentProvider, platformType, menuStructure, integrations,
+      enableDatabase, enablePayments, authProvider, customLayoutElements, useDefaultSettings
+    } = formData;
+    
+    // Função para garantir que o valor seja uma string válida
+    const ensureString = (value: any, fallback: string = ""): string => {
+      if (typeof value === 'string') return value;
+      if (value === null || value === undefined) return fallback;
+      return String(value);
+    };
+
+    // Identificar integrações selecionadas
+    const selectedIntegrations = Object.entries(integrations || {})
+      .filter(([_, enabled]) => enabled)
+      .map(([key, _]) => key);
+
+    const promptStructure = {
+      project_info: {
+        name: ensureString(name, "Minha Aplicação"),
+        description: ensureString(description, "Uma aplicação moderna e funcional"),
+        app_type: ensureString(appType, "web"),
+        platform_type: ensureString(platformType, "web")
+      },
+      design_system: {
+        frontend_stack: ensureString(frontendStack, "react"),
+        css_framework: ensureString(cssFramework, "tailwind"),
+        color_theme: ensureString(colorTheme, "blue-professional"),
+        main_font: ensureString(mainFont, "inter"),
+        layout_style: ensureString(layoutStyle, "header-footer")
+      },
+      features: {
+        authentication: {
+          enabled: Boolean(enableAuth),
+          type: ensureString(authType, "email"),
+          provider: ensureString(authProvider, "supabase"),
+          admin_credentials: enableAuth ? {
+            username: ensureString(adminUsername, "admin"),
+            password: ensureString(adminPassword, "admin123")
+          } : null
+        },
+        database: {
+          enabled: Boolean(enableDatabase),
+          type: ensureString(databaseType, "supabase")
+        },
+        payments: {
+          enabled: Boolean(enablePayments),
+          provider: ensureString(paymentProvider, "stripe")
+        }
+      },
+      integrations: selectedIntegrations.length > 0 ? selectedIntegrations : [],
+      requirements: {
+        menu_structure: Array.isArray(menuStructure) ? menuStructure : [],
+        custom_layout_elements: Array.isArray(customLayoutElements) ? customLayoutElements : [],
+        responsive_design: true,
+        accessibility: true,
+        performance_optimization: true
+      },
+      deliverables: [
+        "Complete functional application",
+        "Responsive design for all devices",
+        "Clean and maintainable code structure",
+        "Documentation and setup instructions"
+      ]
+    };
+
+    return JSON.stringify(promptStructure, null, 2);
+  }, [
+    formData.name,
+    formData.description,
+    formData.appType,
+    formData.frontendStack,
+    formData.cssFramework,
+    formData.colorTheme,
+    formData.mainFont,
+    formData.layoutStyle,
+    formData.enableAuth,
+    formData.authType,
+    formData.adminUsername,
+    formData.adminPassword,
+    formData.databaseType,
+    formData.paymentProvider,
+    formData.platformType,
+    formData.menuStructure,
+    formData.integrations,
+    formData.enableDatabase,
+    formData.enablePayments,
+    formData.authProvider,
+    formData.customLayoutElements,
+    formData.useDefaultSettings
+  ]);
+
+  // Estado para controlar se o usuário editou manualmente o prompt
+  const [isPromptManuallyEdited, setIsPromptManuallyEdited] = useState(false);
+
+  // Sincronizar generatedPromptMemo com generatedPrompt
+  useEffect(() => {
+    console.log('🔄 Sincronizando prompt JSON estruturado...');
+    console.log('generatedPromptMemo:', generatedPromptMemo);
+    console.log('isPromptManuallyEdited:', isPromptManuallyEdited);
+    
+    // Só atualiza se o prompt gerado for diferente do atual, não estiver vazio
+    // e o usuário não tiver editado manualmente
+    if (generatedPromptMemo && generatedPromptMemo !== generatedPrompt && !isPromptManuallyEdited) {
+      console.log('✅ Atualizando generatedPrompt com novo valor');
+      setGeneratedPrompt(generatedPromptMemo);
+    }
+  }, [generatedPromptMemo, generatedPrompt, isPromptManuallyEdited]);
+
+  // Inicializar serviços e carregar configurações padrão para preview
   useEffect(() => {
     const initServices = async () => {
       try {
         // O database já é inicializado automaticamente no módulo
         await geminiService.init();
         setServicesInitialized(true);
+        
+        // Carregar configurações padrão para preview independentemente de useDefaultSettings
+        await loadDefaultSettingsForPreview();
       } catch (err) {
         console.error('Erro ao inicializar serviços:', err);
         setInitializationError('Erro ao inicializar serviços. Verifique as configurações.');
@@ -839,142 +968,225 @@ const CreateAppPage: React.FC = () => {
     initServices();
   }, []);
 
-  // Auto-fill prompt based on form data
-  useEffect(() => {
-    const generatePrompt = () => {
-      const { 
-        name, description, appType, frontendStack, cssFramework, colorTheme, 
-        mainFont, layoutStyle, enableAuth, authType, adminUsername, adminPassword,
-        databaseType, paymentProvider, platformType, menuStructure, integrations,
-        enableDatabase, enablePayments, authProvider, customLayoutElements, useDefaultSettings
-      } = formData;
+  // Nova função para carregar configurações padrão apenas para preview
+  const loadDefaultSettingsForPreview = async () => {
+    try {
+      console.log('🔄 Carregando configurações padrão para preview...');
       
-      // Definir integrações selecionadas primeiro
-      const selectedIntegrations = integrations && Object.keys(integrations).length > 0 
-        ? Object.keys(integrations).filter(key => integrations[key]?.enabled)
+      // Carregar configurações padrão do SettingsService
+      const defaultAppTypeResult = await settingsService.getSetting('defaultAppType');
+      const defaultFrontendStackResult = await settingsService.getSetting('defaultFrontendStack');
+      const defaultCssFrameworkResult = await settingsService.getSetting('defaultCssFramework');
+      const defaultColorThemeResult = await settingsService.getSetting('defaultColorTheme');
+      const defaultMainFontResult = await settingsService.getSetting('defaultFontFamily');
+      const defaultLayoutStyleResult = await settingsService.getSetting('defaultLayoutStyle');
+      const defaultMenuStructureResult = await settingsService.getSetting('defaultMenuStructure');
+      const defaultCustomLayoutElementsResult = await settingsService.getSetting('defaultCustomLayoutElements');
+
+      console.log('🔍 [DEBUG] Resultados para preview:', {
+        defaultAppTypeResult,
+        defaultFrontendStackResult,
+        defaultCssFrameworkResult,
+        defaultColorThemeResult,
+        defaultMainFontResult,
+        defaultLayoutStyleResult,
+        defaultMenuStructureResult,
+        defaultCustomLayoutElementsResult
+      });
+
+      // Extrair valores com fallbacks
+      const defaultAppType = (defaultAppTypeResult?.success && defaultAppTypeResult?.data?.value) 
+        ? defaultAppTypeResult.data.value 
+        : 'Landing Page';
+      
+      const defaultFrontendStack = (defaultFrontendStackResult?.success && defaultFrontendStackResult?.data?.value) 
+        ? defaultFrontendStackResult.data.value 
+        : 'React';
+      
+      const defaultCssFramework = (defaultCssFrameworkResult?.success && defaultCssFrameworkResult?.data?.value) 
+        ? defaultCssFrameworkResult.data.value 
+        : 'TailwindCSS';
+      
+      const defaultColorTheme = (defaultColorThemeResult?.success && defaultColorThemeResult?.data?.value) 
+        ? defaultColorThemeResult.data.value 
+        : 'blue-professional';
+      
+      const defaultMainFont = (defaultMainFontResult?.success && defaultMainFontResult?.data?.value) 
+        ? defaultMainFontResult.data.value 
+        : 'Inter';
+      
+      const defaultLayoutStyle = (defaultLayoutStyleResult?.success && defaultLayoutStyleResult?.data?.value) 
+        ? defaultLayoutStyleResult.data.value 
+        : 'modern';
+      
+      const defaultMenuStructure = (defaultMenuStructureResult?.success && defaultMenuStructureResult?.data?.value) 
+        ? defaultMenuStructureResult.data.value 
+        : 'header-footer';
+      
+      const defaultCustomLayoutElements = (defaultCustomLayoutElementsResult?.success && defaultCustomLayoutElementsResult?.data?.value) 
+        ? JSON.parse(defaultCustomLayoutElementsResult.data.value) 
         : [];
 
-      // Criar estrutura JSON seguindo melhores práticas de engenharia de prompt
-      const promptStructure = {
-        context: "Você é um desenvolvedor especialista em criar aplicações modernas e funcionais. Sua tarefa é gerar código limpo, bem estruturado e seguindo as melhores práticas de desenvolvimento.",
-        project: {
-          name: name || "Aplicação",
-          type: appType || "Landing Page",
-          description: description || "Aplicação moderna e responsiva",
-          platform: platformType || "web",
-          use_default_settings: useDefaultSettings || false
-        },
-        technical_stack: {
-          frontend_framework: frontendStack || "React",
-          css_framework: cssFramework || "TailwindCSS",
-          build_tool: "Vite",
-          package_manager: "npm"
-        },
-        design_system: {
-          color_theme: colorTheme || "blue",
-          typography: mainFont || "Inter",
-          layout_style: layoutStyle || "modern",
-          navigation_type: menuStructure || "header-footer",
-          responsive: true,
-          accessibility: true
-        },
-        features: {
-          authentication: {
-            enabled: enableAuth || false,
-            type: authType || "simple",
-            provider: authProvider || "",
-            admin_user: adminUsername || "",
-            admin_password: adminPassword || ""
-          },
-          database: {
-            enabled: enableDatabase || (!!databaseType && databaseType !== 'none'),
-            type: databaseType || "none"
-          },
-          payments: {
-            enabled: enablePayments || (!!paymentProvider && paymentProvider !== 'none'),
-            provider: paymentProvider || "none"
-          }
-        },
-        integrations: selectedIntegrations,
-        requirements: [
-          "Código limpo e bem documentado",
-          "Estrutura de pastas organizada",
-          "Componentes reutilizáveis",
-          "Design responsivo para mobile e desktop",
-          "Performance otimizada",
-          "SEO friendly",
-          "Acessibilidade (WCAG 2.1)",
-          "Tratamento de erros adequado"
-        ],
-        deliverables: [
-          "Estrutura completa do projeto",
-          "Componentes principais implementados",
-          "Estilos CSS/SCSS organizados",
-          "Configuração de build e desenvolvimento",
-          "README com instruções de instalação e uso"
-        ]
-      };
+      console.log('✅ Configurações padrão para preview carregadas:', {
+        defaultAppType,
+        defaultFrontendStack,
+        defaultCssFramework,
+        defaultColorTheme,
+        defaultMainFont,
+        defaultLayoutStyle,
+        defaultMenuStructure,
+        defaultCustomLayoutElements
+      });
 
-      // Adicionar integrações selecionadas
-      if (selectedIntegrations.length > 0) {
-          const integrationMap = {
-            'openai': { name: 'OpenAI', description: 'Integração com GPT-4, ChatGPT e DALL-E' },
-            'anthropic': { name: 'Anthropic Claude', description: 'Integração com Claude AI Assistant' },
-            'google-ai': { name: 'Google AI', description: 'Integração com Gemini, PaLM e Bard' },
-            'github': { name: 'GitHub API', description: 'Integração com repositórios, issues e actions' },
-            'stripe': { name: 'Stripe', description: 'Sistema de pagamentos e checkout' },
-            'sendgrid': { name: 'SendGrid', description: 'Serviço de email marketing' },
-            'twilio': { name: 'Twilio', description: 'Integração SMS e WhatsApp' },
-            'firebase': { name: 'Firebase', description: 'Database, autenticação e storage' },
-            'supabase': { name: 'Supabase', description: 'Database, autenticação e storage' },
-            'aws': { name: 'AWS Services', description: 'Integração com S3, Lambda e DynamoDB' }
-          };
+      // Atualizar o preview das configurações padrão
+      setDefaultSettingsPreview({
+        appType: String(defaultAppType),
+        frontendStack: String(defaultFrontendStack),
+        cssFramework: String(defaultCssFramework),
+        colorTheme: String(defaultColorTheme),
+        mainFont: String(defaultMainFont),
+        layoutStyle: String(defaultLayoutStyle),
+        menuStructure: String(defaultMenuStructure),
+        customLayoutElements: Array.isArray(defaultCustomLayoutElements) ? defaultCustomLayoutElements : []
+      });
+
+      console.log('✅ Preview das configurações padrão atualizado');
+    } catch (error) {
+      console.error('❌ Erro ao carregar configurações padrão para preview:', error);
+    }
+  };
+
+  // Carregar configurações padrão quando useDefaultSettings é true
+  useEffect(() => {
+    const loadDefaultSettings = async () => {
+      if (formData.useDefaultSettings === true) {
+        try {
+          console.log('🔄 Carregando configurações padrão do Settings...');
           
-          promptStructure.integrations = selectedIntegrations.map(id => ({
-            service: integrationMap[id]?.name || id,
-            description: integrationMap[id]?.description || `Integração com ${id}`,
-            api_key_required: true
-          }));
+          // Carregar configurações padrão do SettingsService
+          const defaultAppTypeResult = await settingsService.getSetting('defaultAppType');
+          const defaultFrontendStackResult = await settingsService.getSetting('defaultFrontendStack');
+          const defaultCssFrameworkResult = await settingsService.getSetting('defaultCssFramework');
+          const defaultColorThemeResult = await settingsService.getSetting('defaultColorTheme');
+          const defaultMainFontResult = await settingsService.getSetting('defaultFontFamily');
+          const defaultLayoutStyleResult = await settingsService.getSetting('defaultLayoutStyle');
+          const defaultMenuStructureResult = await settingsService.getSetting('defaultMenuStructure');
+          const defaultCustomLayoutElementsResult = await settingsService.getSetting('defaultCustomLayoutElements');
+
+          console.log('🔍 [DEBUG] Resultados brutos do settingsService:', {
+            defaultAppTypeResult,
+            defaultFrontendStackResult,
+            defaultCssFrameworkResult,
+            defaultColorThemeResult,
+            defaultMainFontResult,
+            defaultLayoutStyleResult,
+            defaultMenuStructureResult,
+            defaultCustomLayoutElementsResult
+          });
+
+          // Extrair valores corretamente da estrutura { success, data: { key, value } }
+          const defaultAppType = (defaultAppTypeResult?.success && defaultAppTypeResult?.data?.value) 
+            ? defaultAppTypeResult.data.value 
+            : 'Progressive Web App';
+          
+          const defaultFrontendStack = (defaultFrontendStackResult?.success && defaultFrontendStackResult?.data?.value) 
+            ? defaultFrontendStackResult.data.value 
+            : 'React';
+          
+          const defaultCssFramework = (defaultCssFrameworkResult?.success && defaultCssFrameworkResult?.data?.value) 
+            ? defaultCssFrameworkResult.data.value 
+            : 'TailwindCSS';
+          
+          const defaultColorTheme = (defaultColorThemeResult?.success && defaultColorThemeResult?.data?.value) 
+            ? defaultColorThemeResult.data.value 
+            : 'blue-professional';
+          
+          const defaultMainFont = (defaultMainFontResult?.success && defaultMainFontResult?.data?.value) 
+            ? defaultMainFontResult.data.value 
+            : 'inter';
+          
+          const defaultLayoutStyle = (defaultLayoutStyleResult?.success && defaultLayoutStyleResult?.data?.value) 
+            ? defaultLayoutStyleResult.data.value 
+            : 'modern';
+          
+          const defaultMenuStructure = (defaultMenuStructureResult?.success && defaultMenuStructureResult?.data?.value) 
+            ? defaultMenuStructureResult.data.value 
+            : 'header-footer';
+          
+          const defaultCustomLayoutElements = (defaultCustomLayoutElementsResult?.success && defaultCustomLayoutElementsResult?.data?.value) 
+            ? JSON.parse(defaultCustomLayoutElementsResult.data.value) 
+            : [];
+
+          console.log('✅ Configurações padrão carregadas:', {
+            defaultAppType,
+            defaultFrontendStack,
+            defaultCssFramework,
+            defaultColorTheme,
+            defaultMainFont,
+            defaultLayoutStyle,
+            defaultMenuStructure,
+            defaultCustomLayoutElements
+          });
+
+          // Debug: Verificar tipos dos valores
+          console.log('🔍 [DEBUG] Tipos das configurações:', {
+            defaultAppType: typeof defaultAppType,
+            defaultFrontendStack: typeof defaultFrontendStack,
+            defaultCssFramework: typeof defaultCssFramework,
+            defaultColorTheme: typeof defaultColorTheme,
+            defaultMainFont: typeof defaultMainFont,
+            defaultLayoutStyle: typeof defaultLayoutStyle
+          });
+
+          // Aplicar configurações padrão no formData
+          setFormData(prevData => {
+            const newData = {
+              ...prevData,
+              appType: String(defaultAppType),
+              frontendStack: String(defaultFrontendStack),
+              cssFramework: String(defaultCssFramework),
+              colorTheme: String(defaultColorTheme),
+              mainFont: String(defaultMainFont),
+              layoutStyle: String(defaultLayoutStyle),
+              menuStructure: String(defaultMenuStructure),
+              customLayoutElements: Array.isArray(defaultCustomLayoutElements) ? defaultCustomLayoutElements : []
+            };
+            
+            console.log('🔍 [DEBUG] Novo formData sendo aplicado:', {
+              frontendStack: newData.frontendStack,
+              cssFramework: newData.cssFramework,
+              colorTheme: newData.colorTheme,
+              layoutStyle: newData.layoutStyle,
+              tipos: {
+                frontendStack: typeof newData.frontendStack,
+                cssFramework: typeof newData.cssFramework,
+                colorTheme: typeof newData.colorTheme,
+                layoutStyle: typeof newData.layoutStyle
+              }
+            });
+            
+            return newData;
+          });
+
+          console.log('✅ Configurações padrão aplicadas no formData');
+          
+          // Debug: Verificar formData após aplicação (usando setTimeout para aguardar o setState)
+          setTimeout(() => {
+            console.log('🔍 [DEBUG] FormData após aplicação das configurações padrão:', {
+              frontendStack: formData.frontendStack,
+              cssFramework: formData.cssFramework,
+              colorTheme: formData.colorTheme,
+              layoutStyle: formData.layoutStyle
+            });
+          }, 100);
+        } catch (error) {
+          console.error('❌ Erro ao carregar configurações padrão:', error);
         }
-
-      // Adicionar elementos customizados se aplicável
-      if (menuStructure === 'custom' && formData.customLayoutElements.length > 0) {
-        const elementLabels = formData.customLayoutElements.map(elementValue => {
-          const element = CUSTOM_LAYOUT_ELEMENTS.find(el => el.value === elementValue);
-          return element?.label.replace('✅ ', '') || elementValue;
-        });
-        promptStructure.design_system.custom_elements = elementLabels;
       }
-
-      const jsonPrompt = JSON.stringify(promptStructure, null, 2);
-      setGeneratedPrompt(jsonPrompt);
     };
 
-    generatePrompt();
-  }, [
-    formData.name,
-    formData.description,
-    formData.appType,
-    formData.platformType,
-    formData.frontendStack,
-    formData.cssFramework,
-    formData.colorTheme,
-    formData.mainFont,
-    formData.layoutStyle,
-    formData.menuStructure,
-    formData.enableAuth,
-    formData.authType,
-    formData.authProvider,
-    formData.adminUsername,
-    formData.adminPassword,
-    formData.enableDatabase,
-    formData.databaseType,
-    formData.enablePayments,
-    formData.paymentProvider,
-    formData.useDefaultSettings,
-    formData.integrations,
-    formData.customLayoutElements
-  ]);
+    loadDefaultSettings();
+  }, [formData.useDefaultSettings]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -1309,19 +1521,35 @@ const CreateAppPage: React.FC = () => {
                   <ul className="text-gray-500 text-xs space-y-2">
                     <li className="flex items-center">
                       <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
-                      React + TypeScript
+                      {(() => {
+                        const stack = defaultSettingsPreview.frontendStack;
+                        console.log('🔍 [DEBUG] Card UL - frontendStack (preview):', stack, typeof stack);
+                        return stack;
+                      })()} + TypeScript
                     </li>
                     <li className="flex items-center">
                       <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
-                      Tailwind CSS
+                      {(() => {
+                        const framework = defaultSettingsPreview.cssFramework;
+                        console.log('🔍 [DEBUG] Card UL - cssFramework (preview):', framework, typeof framework);
+                        return framework;
+                      })()}
                     </li>
                     <li className="flex items-center">
                       <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
-                      Tema Dark moderno
+                      {(() => {
+                        const theme = defaultSettingsPreview.colorTheme;
+                        console.log('🔍 [DEBUG] Card UL - colorTheme (preview):', theme, typeof theme);
+                        return theme;
+                      })()}
                     </li>
                     <li className="flex items-center">
                       <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
-                      Layout responsivo
+                      {(() => {
+                        const layout = defaultSettingsPreview.layoutStyle;
+                        console.log('🔍 [DEBUG] Card UL - layoutStyle:', layout, typeof layout);
+                        return layout;
+                      })()}
                     </li>
                   </ul>
                 </div>
@@ -2183,27 +2411,27 @@ const CreateAppPage: React.FC = () => {
                     📱 {formData.name}
                   </span>
                 )}
-                {formData.appType && (
+                {formData.appType && typeof formData.appType === 'string' && (
                   <span className="px-3 py-1 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-xs rounded-full">
                     🎯 {formData.appType}
                   </span>
                 )}
-                {formData.frontendStack && (
+                {formData.frontendStack && typeof formData.frontendStack === 'string' && (
                   <span className="px-3 py-1 bg-cyan-600/20 border border-cyan-500/30 text-cyan-300 text-xs rounded-full">
                     ⚛️ {formData.frontendStack}
                   </span>
                 )}
-                {formData.cssFramework && (
+                {formData.cssFramework && typeof formData.cssFramework === 'string' && (
                   <span className="px-3 py-1 bg-green-600/20 border border-green-500/30 text-green-300 text-xs rounded-full">
                     🎨 {formData.cssFramework}
                   </span>
                 )}
-                {formData.colorTheme && (
+                {formData.colorTheme && typeof formData.colorTheme === 'string' && (
                   <span className="px-3 py-1 bg-pink-600/20 border border-pink-500/30 text-pink-300 text-xs rounded-full">
                     🌈 {formData.colorTheme}
                   </span>
                 )}
-                {formData.layoutStyle && (
+                {formData.layoutStyle && typeof formData.layoutStyle === 'string' && (
                   <span className="px-3 py-1 bg-yellow-600/20 border border-yellow-500/30 text-yellow-300 text-xs rounded-full">
                     📐 {formData.layoutStyle}
                   </span>
@@ -2229,7 +2457,10 @@ const CreateAppPage: React.FC = () => {
                 id="generatedPrompt"
                 rows={12}
                 value={generatedPrompt}
-                onChange={(e) => setGeneratedPrompt(e.target.value)}
+                onChange={(e) => {
+                  setGeneratedPrompt(e.target.value);
+                  setIsPromptManuallyEdited(true);
+                }}
                 className="w-full p-4 bg-gray-800/50 border border-gray-600 rounded-lg text-white resize-y text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="O prompt JSON será gerado automaticamente com base nas suas escolhas..."
               />
@@ -2668,6 +2899,7 @@ const CreateAppPage: React.FC = () => {
                   onComplete={handleCompilationComplete}
                   onError={handleCompilationError}
                   isModifying={compilationCompleted}
+                  customPrompt={generatedPrompt}
                 />
               </motion.div>
             ) : (
