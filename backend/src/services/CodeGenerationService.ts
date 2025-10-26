@@ -29,8 +29,6 @@ export interface GeneratedFile {
 }
 
 export class CodeGenerationService {
-  private readonly API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-  
   constructor(private settingsService: SettingsService) {}
 
   async generateCode(request: CodeGenerationRequest): Promise<CodeGenerationResponse> {
@@ -43,6 +41,17 @@ export class CodeGenerationService {
           message: 'Chave API do Gemini não configurada'
         };
       }
+
+      // Get selected model from settings
+      const modelSetting = await this.settingsService.getSetting('geminiModel');
+      const selectedModel = modelSetting ? modelSetting.value : 'gemini-1.5-flash-002';
+      const API_BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`;
+
+      console.log('🔍 [DEBUG] CodeGenerationService - Usando modelo:', {
+        selectedModel,
+        API_BASE_URL,
+        modelSetting
+      });
 
       const systemPrompt = this.buildSystemPrompt(request);
       const userPrompt = this.buildUserPrompt(request);
@@ -58,9 +67,19 @@ export class CodeGenerationService {
       const payload = {
         contents: [{ parts: [{ text: userPrompt }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 8192,
+          topP: 0.8,
+          topK: 40
+        }
       };
 
-      const response = await this.fetchWithRetry(this.API_BASE_URL, {
+      console.log('🔍 [DEBUG] System Prompt enviado:', systemPrompt);
+      console.log('🔍 [DEBUG] User Prompt enviado:', userPrompt);
+      console.log('🔍 [DEBUG] Payload completo:', JSON.stringify(payload, null, 2));
+
+      const response = await this.fetchWithRetry(API_BASE_URL, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -70,9 +89,13 @@ export class CodeGenerationService {
       });
 
       const result = await response.json();
+      console.log('🔍 [DEBUG] Resposta completa da API:', JSON.stringify(result, null, 2));
+      
       const generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      console.log('🔍 [DEBUG] Texto gerado (primeiros 500 chars):', generatedText?.slice(0, 500));
 
       if (!generatedText) {
+        console.error('🔍 [DEBUG] Falha na geração - sem texto gerado');
         return {
           success: false,
           message: 'Falha na geração de código. Verifique sua chave API.',
@@ -80,16 +103,20 @@ export class CodeGenerationService {
         };
       }
 
-      // Process and clean the generated code
-      const cleanedCode = this.processGeneratedCode(generatedText);
-      const files = this.extractFiles(cleanedCode, request);
+      // Process the generated code
+      console.log('🔍 [DEBUG] Iniciando processamento do código...');
+      const processedCode = this.processGeneratedCode(generatedText);
+      console.log('🔍 [DEBUG] Código processado (primeiros 500 chars):', processedCode.slice(0, 500));
+      
+      const files = this.extractFiles(processedCode, request);
+      console.log('🔍 [DEBUG] Arquivos extraídos:', files.map(f => ({ path: f.path, type: f.type, size: f.content.length })));
 
       logs.push('✅ Código gerado com sucesso!');
 
       return {
         success: true,
         message: 'Código gerado com sucesso!',
-        generatedCode: cleanedCode,
+        generatedCode: processedCode,
         files,
         logs
       };
@@ -104,7 +131,98 @@ export class CodeGenerationService {
   }
 
   private buildSystemPrompt(request: CodeGenerationRequest): string {
-    return `Você é um desenvolvedor web especialista. Crie um aplicativo web completo usando HTML, CSS (${request.cssFramework}) e JavaScript vanilla com ABORDAGEM MOBILE-FIRST.
+    // Configuração dinâmica do CSS Framework
+    const getCssFrameworkInstructions = () => {
+      switch (request.cssFramework.toLowerCase()) {
+        case 'tailwind':
+          return {
+            framework: 'Tailwind CSS via CDN',
+            classes: 'Use classes responsivas do Tailwind (sm:, md:, lg:, xl:)',
+            instructions: '- Use Tailwind CSS via CDN para estilização'
+          };
+        case 'bootstrap':
+          return {
+            framework: 'Bootstrap CSS via CDN',
+            classes: 'Use classes responsivas do Bootstrap (col-sm-, col-md-, col-lg-, col-xl-)',
+            instructions: '- Use Bootstrap CSS via CDN para estilização'
+          };
+        case 'bulma':
+          return {
+            framework: 'Bulma CSS via CDN',
+            classes: 'Use classes responsivas do Bulma (is-mobile, is-tablet, is-desktop)',
+            instructions: '- Use Bulma CSS via CDN para estilização'
+          };
+        case 'css':
+        case 'pure':
+        default:
+          return {
+            framework: 'CSS puro',
+            classes: 'Use media queries para responsividade (@media screen and (min-width: ...))',
+            instructions: '- Use CSS puro com media queries para estilização'
+          };
+      }
+    };
+
+    // Configuração dinâmica do Frontend Stack
+    const getFrontendStackInstructions = () => {
+      switch (request.frontendStack.toLowerCase()) {
+        case 'react':
+          return {
+            structure: 'componentes React funcionais com JSX',
+            output: 'Retorne APENAS o código JSX dos componentes principais, sem explicações',
+            javascript: 'Use React hooks (useState, useEffect) conforme necessário',
+            includes: '- Inclua imports necessários do React'
+          };
+        case 'vue':
+          return {
+            structure: 'componentes Vue 3 com Composition API',
+            output: 'Retorne APENAS o código Vue SFC (Single File Component), sem explicações',
+            javascript: 'Use Vue 3 Composition API (ref, reactive, computed) conforme necessário',
+            includes: '- Inclua imports necessários do Vue'
+          };
+        case 'angular':
+          return {
+            structure: 'componentes Angular com TypeScript',
+            output: 'Retorne APENAS o código Angular (component.ts e template), sem explicações',
+            javascript: 'Use Angular services e dependency injection conforme necessário',
+            includes: '- Inclua imports necessários do Angular'
+          };
+        case 'html-vanilla':
+          return {
+            structure: 'HTML completo com CSS e JavaScript vanilla',
+            output: 'Retorne APENAS o código HTML completo com CSS inline ou externo e JavaScript vanilla, sem explicações',
+            javascript: 'Use JavaScript vanilla puro (sem frameworks) - pode ser inline no HTML ou em tags <script>',
+            includes: '- Inclua meta viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">\n- Use HTML5 semântico\n- CSS pode ser inline no <style> ou externo\n- JavaScript vanilla para interatividade'
+          };
+        case 'html':
+        case 'vanilla':
+        default:
+          return {
+            structure: 'HTML completo com JavaScript vanilla',
+            output: 'Retorne APENAS o código HTML completo, sem explicações',
+            javascript: 'Inclua JavaScript inline no HTML',
+            includes: '- Inclua meta viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">'
+          };
+      }
+    };
+
+    const cssConfig = getCssFrameworkInstructions();
+    const frontendConfig = getFrontendStackInstructions();
+
+    return `Você é um desenvolvedor web especialista. Crie um aplicativo web completo usando ${frontendConfig.structure} com ABORDAGEM MOBILE-FIRST.
+
+INSTRUÇÕES IMPORTANTES:
+- ${frontendConfig.output}
+- ${cssConfig.instructions}
+- ${frontendConfig.javascript}
+- OBRIGATÓRIO: Design MOBILE-FIRST com 100% de responsividade
+- ${cssConfig.classes}
+- ${frontendConfig.includes}
+- Elementos touch-friendly (mínimo 44px de altura para botões)
+- Layout flexível que funciona em todas as telas (320px+)
+- Teste mental em: mobile (320px), tablet (768px), desktop (1024px+)
+- Priorize experiência mobile, depois adapte para telas maiores
+- Garanta que o código seja funcional e completamente responsivo
 
 CONFIGURAÇÕES DO PROJETO:
 - Tipo: ${request.appType}
@@ -117,18 +235,7 @@ CONFIGURAÇÕES DO PROJETO:
 - Banco de Dados: ${request.enableDatabase ? 'Habilitado' : 'Desabilitado'}
 - Pagamentos: ${request.enablePayments ? 'Habilitados' : 'Desabilitados'}
 
-INSTRUÇÕES IMPORTANTES:
-- Retorne APENAS o código HTML completo, sem explicações
-- Use ${request.cssFramework} via CDN para estilização
-- Inclua JavaScript inline no HTML
-- OBRIGATÓRIO: Design MOBILE-FIRST com 100% de responsividade
-- Use classes responsivas (sm:, md:, lg:, xl:)
-- Inclua meta viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">
-- Elementos touch-friendly (mínimo 44px de altura para botões)
-- Layout flexível que funciona em todas as telas (320px+)
-- Teste mental em: mobile (320px), tablet (768px), desktop (1024px+)
-- Priorize experiência mobile, depois adapte para telas maiores
-- Garanta que o código seja funcional e completamente responsivo
+APLICAÇÃO DAS CONFIGURAÇÕES:
 - Aplique o tema de cores ${request.colorTheme} consistentemente
 - Use a fonte ${request.mainFont} como fonte principal
 - Implemente o estilo de layout ${request.layoutStyle}
@@ -170,22 +277,69 @@ ${request.enablePayments ? '- Inclua interface de pagamento simulada' : ''}`;
   }
 
   private processGeneratedCode(code: string): string {
+    console.log('🔍 [DEBUG] Código original (primeiros 200 chars):', code.slice(0, 200));
+    
     // Remove markdown code blocks if present
     let cleanedCode = code.replace(/```html\n?/g, '').replace(/```\n?/g, '');
+    console.log('🔍 [DEBUG] Após remoção markdown (primeiros 200 chars):', cleanedCode.slice(0, 200));
     
-    // Fix common issues
+    // Remove any leading/trailing whitespace
+    cleanedCode = cleanedCode.trim();
+    
+    // Fix Unsplash images
+    console.log('🔍 [DEBUG] Aplicando fixUnsplashImages...');
     cleanedCode = this.fixUnsplashImages(cleanedCode);
+    
+    // Ensure viewport meta tag
+    console.log('🔍 [DEBUG] Verificando viewport meta...');
     cleanedCode = this.ensureViewportMeta(cleanedCode);
     
-    return cleanedCode.trim();
+    console.log('🔍 [DEBUG] Código final processado (primeiros 200 chars):', cleanedCode.slice(0, 200));
+    return cleanedCode;
   }
 
   private fixUnsplashImages(code: string): string {
-    // Replace Unsplash URLs with placeholder images
-    return code.replace(
-      /https:\/\/images\.unsplash\.com\/[^"'\s)]+/g,
-      'https://via.placeholder.com/400x300/6366f1/ffffff?text=Image'
-    );
+    // Função para criar SVG placeholder
+    const createPlaceholderSVG = (width = 400, height = 300, text = 'Imagem') => {
+      const svgContent = `
+        <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" fill="#e5e7eb"/>
+          <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="16" fill="#6b7280" text-anchor="middle" dy=".3em">${text}</text>
+        </svg>
+      `;
+      return `data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`;
+    };
+
+    // Mapear URLs do Unsplash para placeholders específicos
+    const unsplashReplacements: { [key: string]: string } = {
+      'https://images.unsplash.com/photo-1620917637841-3b7c25143a4e': createPlaceholderSVG(400, 300, 'Paleta de Sombras'),
+      'https://images.unsplash.com/photo-1622384992984-78326e7922d5': createPlaceholderSVG(400, 300, 'Rímel'),
+      'https://images.unsplash.com/photo-1590890289136-11f44e156475': createPlaceholderSVG(400, 300, 'Blush Pêssego'),
+      'https://images.unsplash.com/photo-1596420455447-b2488a03f47c': createPlaceholderSVG(400, 300, 'Iluminador'),
+      'https://images.unsplash.com/photo-1616782299596-9818817a22ed': createPlaceholderSVG(400, 300, 'Corretivo'),
+      'https://images.unsplash.com/photo-1632731853610-c4e9f7833a6f': createPlaceholderSVG(400, 300, 'Base HD'),
+      'https://images.unsplash.com/photo-1603525547653-379e4d0d046f': createPlaceholderSVG(400, 300, 'Delineador')
+    };
+
+    let fixedCode = code;
+    
+    // Substituir URLs completas do Unsplash
+    Object.keys(unsplashReplacements).forEach(originalUrl => {
+      const regex = new RegExp(originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^"\'\\s]*', 'g');
+      fixedCode = fixedCode.replace(regex, unsplashReplacements[originalUrl]);
+    });
+
+    // Substituir qualquer URL do Unsplash restante (incluindo variações com parâmetros)
+    fixedCode = fixedCode.replace(/https:\/\/images\.unsplash\.com\/[^"'\s>]*/g, createPlaceholderSVG(400, 300, 'Produto'));
+    
+    // Substituir também URLs do Unsplash sem https
+    fixedCode = fixedCode.replace(/http:\/\/images\.unsplash\.com\/[^"'\s>]*/g, createPlaceholderSVG(400, 300, 'Produto'));
+    
+    // Substituir URLs do Unsplash em atributos src, srcset, data-src, etc.
+    fixedCode = fixedCode.replace(/(src|srcset|data-src|background-image|url)\s*[:=]\s*["']?https?:\/\/images\.unsplash\.com\/[^"'\s>)]*["']?/gi, 
+      (match, attr) => `${attr}="${createPlaceholderSVG(400, 300, 'Produto')}"`);
+    
+    return fixedCode;
   }
 
   private ensureViewportMeta(code: string): string {

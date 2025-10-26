@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppConfig } from '../../types/app';
+import { geminiService } from '../../services/gemini';
+import { apiLock } from '../../services/apiLock';
 
 interface CompilationTerminalProps {
   appConfig: AppConfig;
@@ -26,14 +28,16 @@ export const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
   const [progress, setProgress] = useState(0);
   const simulatorRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Usar a instância global do geminiService
 
   const compilationLines: CodeLine[] = [
     { text: '// Iniciando Gemini Dev Environment v2.5 (Canvas Edition)...', delay: 400 },
     { text: '// Tarefa: Geração de aplicativo baseado em configurações...', delay: 400 },
     { text: '// Analisando configurações do Canvas App Creator...', delay: 500 },
     { text: `const projectName = "${appConfig.name}";`, delay: 300 },
-    { text: `const appType = "${appConfig.type}";`, delay: 300 },
-    { text: `const theme = "${appConfig.theme}";`, delay: 300 },
+    { text: `const appType = "${appConfig.appType}";`, delay: 300 },
+    { text: `const theme = "${appConfig.colorTheme}";`, delay: 300 },
+    { text: '// Conectando com Gemini API...', delay: 600 },
     { text: '// Processando estrutura base (HTML)...', delay: 600 },
     { text: '// Aplicando tema e estilos (Tailwind CSS)...', delay: 500 },
     { text: '// Configurando funcionalidades específicas...', delay: 500 },
@@ -43,6 +47,20 @@ export const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
     { text: '// Finalizando integração de componentes...', delay: 400 },
     { text: '// Compilação concluída com sucesso!', delay: 300 }
   ];
+
+  useEffect(() => {
+    const initializeGemini = async () => {
+      try {
+        await geminiService.init();
+        startCompilation();
+      } catch (error) {
+        console.error('Erro ao inicializar Gemini:', error);
+        onError('Erro ao inicializar serviço de IA');
+      }
+    };
+
+    initializeGemini();
+  }, []);
 
   const startCompilation = async () => {
     setIsCompiling(true);
@@ -88,154 +106,111 @@ export const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
     }, 400);
   };
 
-  const generateApp = async () => {
+  const generateApp = async (retryCount = 0) => {
+    const operationId = `generateApp_${appConfig.name}_${Date.now()}`;
+    
     try {
-      // Construir prompt baseado nas configurações
-      const systemPrompt = `Você é um desenvolvedor web especialista. Crie um aplicativo web completo usando HTML, CSS (Tailwind) e JavaScript vanilla com ABORDAGEM MOBILE-FIRST.
-
-CONFIGURAÇÕES DO PROJETO:
-- Nome: ${appConfig.name}
-- Tipo: ${appConfig.type}
-- Tema: ${appConfig.theme}
-- Descrição: ${appConfig.description}
-- Funcionalidades: ${appConfig.features?.join(', ') || 'Básicas'}
-
-INSTRUÇÕES IMPORTANTES:
-- Retorne APENAS o código HTML completo, sem explicações
-- Use Tailwind CSS via CDN para estilização
-- Inclua JavaScript inline no HTML
-- OBRIGATÓRIO: Design MOBILE-FIRST com 100% de responsividade
-- Use classes responsivas do Tailwind (sm:, md:, lg:, xl:)
-- Inclua meta viewport: <meta name="viewport" content="width=device-width, initial-scale=1.0">
-- Elementos touch-friendly (mínimo 44px de altura para botões)
-- Layout flexível que funciona em todas as telas (320px+)
-- Aplique o tema ${appConfig.theme} consistentemente
-- Implemente as funcionalidades solicitadas de forma funcional
-- Garanta que o código seja completamente responsivo e funcional`;
-
-      const userPrompt = `Crie um ${appConfig.type} chamado "${appConfig.name}" com tema ${appConfig.theme}. ${appConfig.description}`;
-
-      // Usar logs reais da compilação se disponíveis
-      const generatedCode = await simulateCodeGeneration(systemPrompt, userPrompt);
+      setLoadingText('Gerando código com Gemini AI...');
       
-      setIsCompiling(false);
-      onCompilationComplete(generatedCode);
+      // Sistema global de lock para prevenir múltiplas chamadas
+      if (!apiLock.acquireLock(operationId)) {
+        console.log('⚠️ [FEATURES_TERMINAL] Geração já em andamento, ignorando chamada duplicada');
+        return;
+      }
+      
+      // Manter compatibilidade com sistema antigo
+      if (generateApp.isRunning) {
+        console.log('⚠️ [FEATURES_TERMINAL] Sistema antigo detectou geração em andamento');
+        apiLock.releaseLock(operationId);
+        return;
+      }
+      generateApp.isRunning = true;
+      
+      // Recarregar a API key antes de gerar o código
+      await geminiService.reload();
+      
+      // Usar o serviço Gemini para gerar o código
+      console.log(`🚀 [FEATURES_TERMINAL] Iniciando chamada à API Gemini para: ${operationId}`);
+      const response = await geminiService.generateApp(appConfig);
+      
+      console.log(`✅ [FEATURES_TERMINAL] Resposta recebida da API Gemini para: ${operationId}`, {
+        success: response.success,
+        hasCode: !!response.code,
+        codeLength: response.code?.length || 0,
+        error: response.error
+      });
+      
+      if (response.success && response.code) {
+        setLoadingText('Código gerado com sucesso!');
+        
+        // Simular arquivos gerados
+        const generatedFiles = [
+          {
+            name: 'index.html',
+            content: response.code,
+            type: 'html'
+          }
+        ];
+
+        // Logs de compilação
+        const compilationLogs = [
+          ...codeLines,
+          '// Código gerado pela Gemini AI',
+          '// Aplicativo pronto para uso!'
+        ];
+
+        onCompilationComplete(response.code, generatedFiles, compilationLogs);
+      } else {
+        const errorMessage = response.error || 'Nenhum código foi gerado';
+        console.error('Erro na resposta do Gemini:', errorMessage);
+        
+        // Melhorar mensagens de erro de quota
+        let userFriendlyError = errorMessage;
+        let shouldRetry = false;
+        
+        if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+          if (retryCount < 3) {
+            shouldRetry = true;
+            const waitTime = Math.min(30 + (retryCount * 30), 120); // 30s, 60s, 90s
+            userFriendlyError = `⏳ Limite de requisições atingido. Tentando novamente em ${waitTime} segundos... (Tentativa ${retryCount + 1}/3)`;
+            setLoadingText(userFriendlyError);
+            
+            setTimeout(() => {
+              generateApp(retryCount + 1);
+            }, waitTime * 1000);
+            return;
+          } else {
+            userFriendlyError = '⏳ Limite de requisições da API atingido. Tente novamente em alguns minutos ou use uma API Key diferente.';
+          }
+        } else if (errorMessage.includes('API Key')) {
+          userFriendlyError = '🔑 Problema com a API Key. Verifique se está configurada corretamente nas configurações.';
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+          userFriendlyError = '🌐 Erro de conexão. Verifique sua internet e tente novamente.';
+        }
+        
+        if (!shouldRetry) {
+          throw new Error(userFriendlyError);
+        }
+      }
     } catch (error) {
-      setIsCompiling(false);
-      onError(error instanceof Error ? error.message : 'Erro desconhecido na compilação');
+      console.error('Erro na geração:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido na geração';
+      setLoadingText(`Erro: ${errorMessage}`);
+      onError(errorMessage);
+    } finally {
+      // Liberar flag de execução e lock global
+      generateApp.isRunning = false;
+      apiLock.releaseLock(operationId);
     }
   };
 
-  const simulateCodeGeneration = async (systemPrompt: string, userPrompt: string): Promise<string> => {
-    // Simular delay da API
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Código HTML básico baseado nas configurações
-    const htmlTemplate = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${appConfig.name}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Estilos customizados para ${appConfig.theme} */
-        .theme-${appConfig.theme?.toLowerCase() || 'default'} {
-            ${getThemeStyles(appConfig.theme || 'default')}
-        }
-    </style>
-</head>
-<body class="theme-${appConfig.theme?.toLowerCase() || 'default'} min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-    <div class="container mx-auto px-4 py-8">
-        <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4">${appConfig.name}</h1>
-            <p class="text-lg text-gray-600 max-w-2xl mx-auto">${appConfig.description}</p>
-        </header>
-        
-        <main class="max-w-4xl mx-auto">
-            <div class="bg-white rounded-lg shadow-lg p-6 md:p-8">
-                <h2 class="text-2xl font-semibold mb-6 text-gray-800">Funcionalidades Principais</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    ${generateFeatureCards(appConfig.features || [])}
-                </div>
-                
-                <div class="mt-8 text-center">
-                    <button onclick="showAlert('${appConfig.name} está funcionando!')" 
-                            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105">
-                        Testar Aplicativo
-                    </button>
-                </div>
-            </div>
-        </main>
-    </div>
-    
-    <script>
-        function showAlert(message) {
-            alert(message);
-        }
-        
-        // Funcionalidades específicas do ${appConfig.type}
-        ${getTypeSpecificScript(appConfig.type)}
-    </script>
-</body>
-</html>`;
-
-    return htmlTemplate;
-  };
-
-  const getThemeStyles = (theme: string): string => {
-    const themes: Record<string, string> = {
-      'Moderno': 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);',
-      'Clássico': 'background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);',
-      'Escuro': 'background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);',
-      'Colorido': 'background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);'
-    };
-    return themes[theme] || themes['Moderno'];
-  };
-
-  const generateFeatureCards = (features: string[]): string => {
-    return features.map(feature => `
-      <div class="bg-gray-50 p-4 rounded-lg">
-        <h3 class="font-semibold text-gray-800 mb-2">${feature}</h3>
-        <p class="text-gray-600 text-sm">Funcionalidade implementada e pronta para uso.</p>
-      </div>
-    `).join('');
-  };
-
-  const getTypeSpecificScript = (type: string): string => {
-    const scripts: Record<string, string> = {
-      'Website': `
-        console.log('Website ${appConfig.name} carregado com sucesso!');
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM carregado - Website pronto!');
-        });
-      `,
-      'E-commerce': `
-        let cart = [];
-        function addToCart(item) {
-            cart.push(item);
-            console.log('Item adicionado ao carrinho:', item);
-        }
-      `,
-      'Blog': `
-        function formatDate(date) {
-            return new Date(date).toLocaleDateString('pt-BR');
-        }
-        console.log('Blog ${appConfig.name} inicializado!');
-      `
-    };
-    return scripts[type] || scripts['Website'];
-  };
-
   useEffect(() => {
-    startCompilation();
-    
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [appConfig]);
+  }, []);
 
   return (
     <div className="bg-gray-900 h-full w-full flex flex-col overflow-hidden">

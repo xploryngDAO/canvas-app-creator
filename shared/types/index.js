@@ -11,7 +11,8 @@ export const APP_TYPES = [
 export const FRONTEND_STACKS = [
     'react',
     'vue',
-    'vanilla'
+    'vanilla',
+    'html-vanilla'
 ];
 export const CSS_FRAMEWORKS = [
     'tailwind',

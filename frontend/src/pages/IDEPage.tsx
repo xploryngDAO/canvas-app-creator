@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { AppConfig } from '../types/app';
 import { 
   ChevronDown, 
@@ -10,37 +10,51 @@ import {
   Maximize, 
   ZoomIn, 
   ZoomOut, 
-  Eye,
-  Bot,
-  FolderOpen,
+  RotateCcw, 
+  Bot, 
+  Upload, 
+  Image, 
+  Mic, 
+  Send, 
+  AtSign, 
+  Hash, 
+  Wand2, 
+  ArrowLeft, 
+  FileText, 
+  Code, 
   Code2,
-  Save,
-  Download,
-  Minimize2,
-  Plus,
-  Upload,
-  Image,
-  Mic,
-  AtSign,
-  Hash,
-  Sparkles,
-  Send,
+  FolderOpen,
+  Database, 
+  Brain, 
+  Plug, 
+  StickyNote, 
+  BookOpen, 
+  CheckSquare, 
+  BarChart3, 
+  Map, 
+  GitBranch, 
+  Eye, 
+  EyeOff, 
+  MousePointer, 
+  Layers, 
+  Settings, 
+  Palette, 
+  Type, 
+  Layout, 
+  Zap, 
+  Shield, 
+  CreditCard, 
+  Smartphone as SmartphoneIcon, 
+  Globe, 
+  Menu, 
   X,
-  Database,
-  Brain,
-  Plug,
+  Sparkles,
   Square,
-  StickyNote,
-  CheckSquare,
-  BarChart3,
-  Map,
-  GitBranch,
-  FileText,
-  ArrowLeft,
-  MicIcon
+  Plus,
+  Minimize2
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import { database } from '@/services/database';
 
 interface IDEPageProps {}
 
@@ -58,6 +72,7 @@ type EditorSubTabType = 'code-generator' | 'refactor-agent' | 'debug-agent' | 't
 const IDEPage: React.FC<IDEPageProps> = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { projectId, versionId } = useParams<{ projectId?: string; versionId?: string }>();
   
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
   const [generatedCode, setGeneratedCode] = useState('');
@@ -152,19 +167,78 @@ const IDEPage: React.FC<IDEPageProps> = () => {
   const [originalPrompt, setOriginalPrompt] = useState('');
 
   useEffect(() => {
-    if (location.state) {
-      const { appConfig, generatedCode, generatedFiles } = location.state;
-      setAppConfig(appConfig);
-      setGeneratedCode(generatedCode);
-      setGeneratedFiles(generatedFiles || []);
+    const loadProjectData = async () => {
+      console.log('🔍 [IDE_PAGE] Parâmetros da URL:', { projectId, versionId });
+      console.log('🔍 [IDE_PAGE] Location state:', location.state);
       
-      if (generatedFiles && generatedFiles.length > 0) {
-        setSelectedFile(generatedFiles[0]);
+      // Se há projectId e versionId nos parâmetros da URL, carregar versão específica
+      if (projectId && versionId) {
+        try {
+          console.log('🔍 [IDE_PAGE] Carregando projeto:', projectId);
+          const project = await database.getProject(projectId);
+          
+          if (!project) {
+            console.error('❌ [IDE_PAGE] Projeto não encontrado:', projectId);
+            navigate('/projects');
+            return;
+          }
+          
+          console.log('✅ [IDE_PAGE] Projeto carregado:', project);
+
+          console.log('🔍 [IDE_PAGE] Carregando versões do projeto:', projectId);
+          const versions = await database.getVersions(projectId);
+          console.log('🔍 [IDE_PAGE] Versões encontradas:', versions);
+          
+          const version = versions.find(v => v.version_number === parseInt(versionId));
+          console.log('🔍 [IDE_PAGE] Versão específica encontrada:', version);
+          
+          if (!version) {
+            console.error('❌ [IDE_PAGE] Versão não encontrada:', versionId);
+            navigate('/projects');
+            return;
+          }
+
+          // Configurar o appConfig baseado no projeto
+          const config: AppConfig = {
+            id: project.id,
+            appName: project.title,
+            description: project.description || '',
+            ...project.config
+          };
+
+          console.log('✅ [IDE_PAGE] Configurando IDE com versão:', {
+            config,
+            codeLength: version.code?.length || 0
+          });
+
+          setAppConfig(config);
+          setGeneratedCode(version.code || '');
+          setGeneratedFiles([]);
+          
+        } catch (error) {
+          console.error('❌ [IDE_PAGE] Erro ao carregar versão do projeto:', error);
+          navigate('/projects');
+        }
       }
-    } else {
-      navigate('/create');
-    }
-  }, [location.state, navigate]);
+      // Se há dados no location.state (vindo da criação de app)
+      else if (location.state) {
+        const { appConfig, generatedCode, generatedFiles } = location.state;
+        setAppConfig(appConfig);
+        setGeneratedCode(generatedCode);
+        setGeneratedFiles(generatedFiles || []);
+        
+        if (generatedFiles && generatedFiles.length > 0) {
+          setSelectedFile(generatedFiles[0]);
+        }
+      }
+      // Se não há dados, redirecionar para criar app
+      else {
+        navigate('/create');
+      }
+    };
+
+    loadProjectData();
+  }, [location.state, navigate, projectId, versionId]);
 
   // Redimensionamento horizontal
   const handleMouseDownHorizontal = (e: React.MouseEvent) => {
@@ -376,10 +450,32 @@ const IDEPage: React.FC<IDEPageProps> = () => {
     }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!chatMessage.trim()) return;
     
     console.log('Enviando mensagem:', chatMessage);
+    
+    // Salvar versão se há um projeto carregado
+    if (appConfig?.id) {
+      try {
+        // Obter o número da próxima versão
+        const existingVersions = await database.getVersions(appConfig.id);
+        const nextVersionNumber = existingVersions.length + 1;
+        
+        // Criar nova versão com o prompt atual
+        await database.createVersion({
+          project_id: appConfig.id,
+          version_number: nextVersionNumber,
+          prompt: chatMessage.trim(),
+          code: generatedCode || ''
+        });
+        
+        console.log(`Versão ${nextVersionNumber} criada para o projeto ${appConfig.id}`);
+      } catch (error) {
+        console.error('Erro ao criar versão:', error);
+      }
+    }
+    
     setChatMessage('');
     
     // Reset textarea height after sending message
@@ -972,7 +1068,7 @@ const IDEPage: React.FC<IDEPageProps> = () => {
                 }}
               >
                 <iframe
-                  src={generatedCode ? `data:text/html;charset=utf-8,${encodeURIComponent(generatedCode)}` : 'about:blank'}
+                  srcDoc={generatedCode || ''}
                   className="w-full h-full border-0"
                   title="Preview"
                   style={{ 
@@ -981,6 +1077,11 @@ const IDEPage: React.FC<IDEPageProps> = () => {
                   }}
                   onLoad={(e) => {
                     const iframe = e.target as HTMLIFrameElement;
+                    console.log('🎯 Preview carregado:', {
+                      hasContent: !!generatedCode,
+                      contentLength: generatedCode?.length || 0,
+                      contentPreview: generatedCode?.slice(0, 100) || 'Nenhum conteúdo'
+                    });
                     try {
                       if (inspectMode && iframe.contentDocument) {
                         iframe.contentDocument.addEventListener('click', (clickEvent) => {
@@ -1385,7 +1486,7 @@ const IDEPage: React.FC<IDEPageProps> = () => {
                 style={{ transform: `scale(${previewZoom / 100})` }}
               >
                 <iframe
-                  src={generatedCode ? `data:text/html;charset=utf-8,${encodeURIComponent(generatedCode)}` : "about:blank"}
+                  srcDoc={generatedCode || ''}
                   className="w-full h-full border-0"
                   title="Preview Fullscreen"
                   style={{ 
@@ -1394,6 +1495,11 @@ const IDEPage: React.FC<IDEPageProps> = () => {
                   }}
                   onLoad={(e) => {
                     const iframe = e.target as HTMLIFrameElement;
+                    console.log('🎯 Preview Fullscreen carregado:', {
+                      hasContent: !!generatedCode,
+                      contentLength: generatedCode?.length || 0,
+                      contentPreview: generatedCode?.slice(0, 100) || 'Nenhum conteúdo'
+                    });
                     try {
                       if (inspectMode && iframe.contentDocument) {
                         iframe.contentDocument.addEventListener('click', (clickEvent) => {

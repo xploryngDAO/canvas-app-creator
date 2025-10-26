@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppConfig } from '../types/app';
+import { apiLock } from '../services/apiLock';
 
 interface CompilationTerminalProps {
   appConfig: AppConfig;
@@ -29,6 +30,7 @@ const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
   const [progress, setProgress] = useState(0);
   const [generatedCode, setGeneratedCode] = useState('');
   const terminalRef = useRef<HTMLDivElement>(null);
+  const [isGenerating, setIsGenerating] = useState(false); // Prevenir múltiplas chamadas
 
   // Gerar steps de compilação baseados na configuração do app
   const generateCompilationSteps = (config: AppConfig): CompilationStep[] => {
@@ -97,66 +99,76 @@ const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
     return steps;
   };
 
-  // Simular geração de código baseada na configuração
-  const generateAppCode = (config: AppConfig): string => {
-    const codeTemplate = `
-// ${config.name} - Gerado automaticamente
-// Tipo: ${config.appType}
-// Stack: ${config.frontendStack} + ${config.cssFramework}
+  // Gerar código usando o serviço Gemini real com debounce
+  const generateAppCode = async (config: AppConfig): Promise<string> => {
+    const operationId = `generateAppCode_${config.name}_${Date.now()}`;
+    
+    // Sistema global de lock para prevenir múltiplas chamadas
+    if (!apiLock.acquireLock(operationId)) {
+      console.log('⚠️ [MAIN_TERMINAL] Geração já em andamento via lock global, ignorando chamada duplicada');
+      throw new Error('Geração já em andamento');
+    }
+    
+    // Manter compatibilidade com sistema local
+    if (isGenerating) {
+      console.log('⚠️ [MAIN_TERMINAL] Sistema local detectou geração em andamento');
+      apiLock.releaseLock(operationId);
+      throw new Error('Geração já em andamento');
+    }
 
-import React from 'react';
-import './App.css';
-
-const App: React.FC = () => {
-  return (
-    <div className="min-h-screen bg-${config.colorTheme}-50">
-      <header className="bg-${config.colorTheme}-600 text-white p-6">
-        <h1 className="text-3xl font-${config.mainFont.toLowerCase()} font-bold">
-          ${config.name}
-        </h1>
-        <p className="text-${config.colorTheme}-100 mt-2">
-          ${config.description}
-        </p>
-      </header>
+    setIsGenerating(true);
+    
+    try {
+      addTerminalLine('🤖 Conectando com Gemini AI...');
       
-      <main className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          ${config.appType === 'E-commerce' ? `
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">Produtos</h2>
-            <p className="text-gray-600">Catálogo de produtos</p>
-          </div>
-          ` : ''}
-          
-          ${config.enableAuth ? `
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">Autenticação</h2>
-            <p className="text-gray-600">Sistema de login configurado</p>
-          </div>
-          ` : ''}
-          
-          ${config.enableDatabase ? `
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">Banco de Dados</h2>
-            <p className="text-gray-600">${config.databaseType} configurado</p>
-          </div>
-          ` : ''}
-        </div>
-      </main>
+      // Importar e usar o serviço Gemini
+      const { geminiService } = await import('../services/gemini');
+      await geminiService.reload();
       
-      <footer className="bg-gray-800 text-white p-6 mt-12">
-        <p className="text-center">
-          © 2024 ${config.name}. Criado com Canvas App Creator.
-        </p>
-      </footer>
-    </div>
-  );
-};
-
-export default App;
-    `.trim();
-
-    return codeTemplate;
+      addTerminalLine('🚀 Enviando configuração para Gemini...');
+      console.log(`🚀 [MAIN_TERMINAL] Iniciando chamada à API Gemini para: ${operationId}`);
+      const response = await geminiService.generateApp(config);
+      
+      console.log(`✅ [MAIN_TERMINAL] Resposta recebida da API Gemini para: ${operationId}`, {
+        success: response.success,
+        hasCode: !!response.code,
+        codeLength: response.code?.length || 0,
+        error: response.error
+      });
+      
+      if (response.success && response.code) {
+        addTerminalLine('✅ Código gerado pela Gemini AI!', 'success');
+        return response.code;
+      } else {
+        const errorMessage = response.error || 'Erro desconhecido na geração';
+        addTerminalLine(`❌ Erro na Gemini AI: ${errorMessage}`, 'error');
+        
+        // Melhorar mensagens de erro
+        if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+          throw new Error('⏳ Limite de requisições da API atingido. Tente novamente em alguns minutos ou use uma API Key diferente.');
+        } else if (errorMessage.includes('API Key')) {
+          throw new Error('🔑 Problema com a API Key. Verifique se está configurada corretamente nas configurações.');
+        } else {
+          throw new Error(errorMessage);
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      addTerminalLine(`❌ Falha na geração: ${errorMessage}`, 'error');
+      
+      // Logs detalhados para debug
+      console.error('🔍 [MAIN_TERMINAL] Erro detalhado na geração:', {
+        error,
+        config,
+        operationId,
+        timestamp: new Date().toISOString()
+      });
+      
+      throw error;
+    } finally {
+      setIsGenerating(false);
+      apiLock.releaseLock(operationId);
+    }
   };
 
   // Adicionar linha ao terminal
@@ -209,9 +221,9 @@ export default App;
         await executeStep(steps[i], i);
       }
       
-      // Gerar código final
+      // Gerar código final usando Gemini AI
       addTerminalLine('🎨 Gerando código do aplicativo...');
-      const code = generateAppCode(appConfig);
+      const code = await generateAppCode(appConfig);
       setGeneratedCode(code);
       
       addTerminalLine('🎉 App gerado com sucesso!', 'success');
@@ -223,9 +235,20 @@ export default App;
       }, 1000);
       
     } catch (error) {
-      addTerminalLine(`Erro durante a compilação: ${error}`, 'error');
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido durante a compilação';
+      addTerminalLine(`❌ Erro durante a compilação: ${errorMessage}`, 'error');
+      
+      // Logs detalhados para debug
+      console.error('🔍 [DEBUG] Erro detalhado na compilação:', {
+        error,
+        appConfig,
+        currentStep,
+        compilationSteps: compilationSteps.map(s => ({ id: s.id, completed: s.completed })),
+        timestamp: new Date().toISOString()
+      });
+      
       setIsCompiling(false);
-      onError(error as string);
+      onError(errorMessage);
     }
   };
 

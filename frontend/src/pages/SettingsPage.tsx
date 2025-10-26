@@ -25,7 +25,8 @@ const SettingsPage: React.FC = () => {
   const [isTestingApi, setIsTestingApi] = useState(false);
   
   const [settings, setSettings] = useState({
-    geminiApiKey: '',
+    geminiApiKey: 'AIzaSyAkXAZWO3f6yKV-a0qM_c4G2s6Yztj8kjg',
+    geminiModel: 'gemini-2.5-flash',
     defaultAppType: 'landing-page',
     defaultFrontendStack: 'React',
     defaultCssFramework: 'TailwindCSS',
@@ -48,9 +49,13 @@ const SettingsPage: React.FC = () => {
     try {
       setIsLoading(true);
       
+      // Initialize settings service
+      await settingsService.init();
+      
       // Load all settings with proper error handling
       const settingKeys = [
         'geminiApiKey',
+        'geminiModel',
         'defaultAppType',
         'defaultFrontendStack', 
         'defaultCssFramework',
@@ -89,18 +94,19 @@ const SettingsPage: React.FC = () => {
 
       setSettings({
         geminiApiKey: getValue(0, '') as string,
-        defaultAppType: getValue(1, 'landing-page') as string,
-        defaultFrontendStack: getValue(2, 'React') as string,
-        defaultCssFramework: getValue(3, 'TailwindCSS') as string,
-        defaultColorTheme: getValue(4, 'blue') as string,
-        defaultLanguage: getValue(5, 'pt-BR') as string,
-        defaultFontFamily: getValue(6, 'Inter') as string,
-        defaultLayoutStyle: getValue(7, 'modern') as string,
-        defaultMenuStructure: getValue(8, 'sidebar') as string,
-        darkMode: getValue(9, true) as boolean,
-        autoSave: getValue(10, true) as boolean,
-        notifications: getValue(11, true) as boolean,
-        defaultCustomLayoutElements: getValue(12, []) as string[]
+        geminiModel: getValue(1, 'gemini-1.5-flash-002') as string,
+        defaultAppType: getValue(2, 'landing-page') as string,
+        defaultFrontendStack: getValue(3, 'React') as string,
+        defaultCssFramework: getValue(4, 'TailwindCSS') as string,
+        defaultColorTheme: getValue(5, 'blue') as string,
+        defaultLanguage: getValue(6, 'pt-BR') as string,
+        defaultFontFamily: getValue(7, 'Inter') as string,
+        defaultLayoutStyle: getValue(8, 'modern') as string,
+        defaultMenuStructure: getValue(9, 'sidebar') as string,
+        darkMode: getValue(10, true) as boolean,
+        autoSave: getValue(11, true) as boolean,
+        notifications: getValue(12, true) as boolean,
+        defaultCustomLayoutElements: getValue(13, []) as string[]
       });
     } catch (err) {
       console.warn('Some settings could not be loaded, using defaults:', err);
@@ -133,6 +139,7 @@ const SettingsPage: React.FC = () => {
       // Save all settings
       const savePromises = [
         settingsService.setSetting('geminiApiKey', settings.geminiApiKey),
+        settingsService.setSetting('geminiModel', settings.geminiModel),
         settingsService.setSetting('defaultAppType', settings.defaultAppType),
         settingsService.setSetting('defaultFrontendStack', settings.defaultFrontendStack),
         settingsService.setSetting('defaultCssFramework', settings.defaultCssFramework),
@@ -151,6 +158,10 @@ const SettingsPage: React.FC = () => {
       const allSuccessful = results.every(result => result.success);
 
       if (allSuccessful) {
+        // Recarregar o GeminiService após salvar a API key
+        const { geminiService } = await import('@/services/gemini');
+        await geminiService.reload();
+        
         success('Configurações salvas!', 'Todas as configurações foram salvas com sucesso');
       } else {
         error('Erro ao salvar', 'Algumas configurações não puderam ser salvas');
@@ -255,7 +266,7 @@ const SettingsPage: React.FC = () => {
                         type={showApiKey ? 'text' : 'password'}
                         value={settings.geminiApiKey}
                         onChange={(e) => handleInputChange('geminiApiKey', e.target.value)}
-                        placeholder="Insira sua API Key do Google Gemini"
+                        placeholder="Cole sua API Key do Gemini aqui"
                         className="text-sm pr-10"
                       />
                       <button
@@ -294,6 +305,24 @@ const SettingsPage: React.FC = () => {
                     >
                       Google AI Studio
                     </a>
+                  </p>
+                </div>
+
+                {/* Gemini Model Selection */}
+                <div>
+                  <Select
+                    label="Modelo Gemini"
+                    value={settings.geminiModel}
+                    onChange={(e) => handleInputChange('geminiModel', e.target.value)}
+                    className="text-sm"
+                    options={[
+                      { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash Experimental (Free Tier) ⚡" },
+                      { value: "gemini-1.5-flash-002", label: "Gemini 1.5 Flash 002 (Free Tier) ⚡" },
+                      { value: "gemini-1.5-pro-002", label: "Gemini 1.5 Pro 002 (Paid) 💎" }
+                    ]}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Modelos Flash têm free tier com rate limits. Modelos Pro são pagos mas oferecem melhor qualidade.
                   </p>
                 </div>
               </div>

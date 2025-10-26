@@ -29,6 +29,14 @@ export const AnimatedRoutes = () => {
         } 
       />
       <Route 
+        path="/create-app" 
+        element={
+          <PageTransition>
+            <CreateAppPage />
+          </PageTransition>
+        } 
+      />
+      <Route 
         path="/compilation" 
         element={
           <PageTransition>
@@ -38,6 +46,14 @@ export const AnimatedRoutes = () => {
       />
       <Route 
         path="/ide" 
+        element={
+          <PageTransition>
+            <IDEPage />
+          </PageTransition>
+        } 
+      />
+      <Route 
+        path="/ide/:projectId/:versionId" 
         element={
           <PageTransition>
             <IDEPage />

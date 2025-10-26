@@ -380,6 +380,17 @@ export const FRONTEND_STACKS_EXPANDED = [
         fill: "white"
       })
     )
+  },
+  {
+    value: 'html-vanilla',
+    title: '🌐 HTML + CSS + JS',
+    description: 'HTML puro com CSS e JavaScript',
+    preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-orange-400" },
+      React.createElement('path', { 
+        d: "M12,17.56L16.07,16.43L16.62,10.33H9.38L9.2,8.3H16.8L17,6.31H7L7.56,12.32H14.45L14.22,14.9L12,15.5L9.78,14.9L9.64,13.24H7.64L7.93,16.43L12,17.56M4.07,3H19.93L18.5,19.2L12,21L5.5,19.2L4.07,3Z",
+        fill: "currentColor"
+      })
+    )
   }
 ];
 
@@ -453,6 +464,18 @@ export const CSS_FRAMEWORKS_EXPANDED = [
         d: "M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3z",
         fill: "currentColor"
       })
+    )
+  },
+  {
+    value: 'TailwindCSS-CDN',
+    title: '🎨 Tailwind CSS (CDN)',
+    description: 'Tailwind via CDN',
+    preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-cyan-400" },
+      React.createElement('path', { 
+        d: "M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C7.666,17.818,9.027,19.2,12.001,19.2c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z",
+        fill: "currentColor"
+      }),
+      React.createElement('circle', { cx: "20", cy: "4", r: "2", fill: "#10B981", opacity: "0.8" })
     )
   }
 ];

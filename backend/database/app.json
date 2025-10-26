@@ -1,0 +1,23 @@
+{
+  "projects": [],
+  "settings": [
+    {
+      "key": "geminiApiKey",
+      "value": "",
+      "created_at": "2025-10-25T16:08:56.086Z",
+      "updated_at": "2025-10-25T16:08:56.087Z"
+    },
+    {
+      "key": "default_theme",
+      "value": "modern",
+      "created_at": "2025-10-25T16:08:56.087Z",
+      "updated_at": "2025-10-25T16:08:56.087Z"
+    },
+    {
+      "key": "auto_save",
+      "value": "true",
+      "created_at": "2025-10-25T16:08:56.087Z",
+      "updated_at": "2025-10-25T16:08:56.087Z"
+    }
+  ]
+}

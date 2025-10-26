@@ -40,11 +40,11 @@ export class SettingsService {
   }
 
   async setGeminiApiKey(apiKey: string): Promise<void> {
-    await this.setSetting('gemini_api_key', apiKey);
+    await this.setSetting('geminiApiKey', apiKey);
   }
 
   async getGeminiApiKey(): Promise<string | null> {
-    const setting = await this.getSetting('gemini_api_key');
+    const setting = await this.getSetting('geminiApiKey');
     return setting ? setting.value : null;
   }
 
@@ -70,12 +70,16 @@ export class SettingsService {
 
   async testGeminiApiKeyDirect(apiKey: string): Promise<GeminiApiKeyResponse> {
     try {
+      // Get selected model from settings for testing
+      const modelSetting = await this.getSetting('geminiModel');
+      const selectedModel = modelSetting ? modelSetting.value : 'gemini-1.5-flash-002';
+      
       // Test the API key with a real request to Gemini
       const testPayload = {
         contents: [{ parts: [{ text: "Hello, this is a test message." }] }]
       };
 
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent', {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

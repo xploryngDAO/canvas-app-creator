@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, Settings } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,10 +8,12 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { CompilationTerminal } from '@/components/features/CompilationTerminal';
 import { APP_TYPES, FRONTEND_STACKS, CSS_FRAMEWORKS, COLOR_THEMES, FONT_FAMILIES, LAYOUT_STYLES } from '../../../shared/types';
-import { APP_TYPES_EXPANDED } from '@/constants/settingsOptions';
+import { APP_TYPES_EXPANDED, FRONTEND_STACKS_EXPANDED, CSS_FRAMEWORKS_EXPANDED } from '@/constants/settingsOptions';
 import { useToast } from '@/hooks/useToast';
 import { projectService, CreateProjectRequest } from '@/services/projectService';
 import { AppConfig } from '@/types/app';
+import { database } from '@/services/database';
+import { geminiService } from '@/services/gemini';
 
 // Mapeamento de opções de layout por plataforma
 const LAYOUT_OPTIONS_BY_PLATFORM = {
@@ -817,6 +819,26 @@ const CreateAppPage: React.FC = () => {
   const [generatedCode, setGeneratedCode] = useState('');
   const [compilationError, setCompilationError] = useState('');
 
+  // Estado para controlar se os serviços foram inicializados
+  const [servicesInitialized, setServicesInitialized] = useState(false);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
+
+  // Inicializar serviços
+  useEffect(() => {
+    const initServices = async () => {
+      try {
+        // O database já é inicializado automaticamente no módulo
+        await geminiService.init();
+        setServicesInitialized(true);
+      } catch (err) {
+        console.error('Erro ao inicializar serviços:', err);
+        setInitializationError('Erro ao inicializar serviços. Verifique as configurações.');
+      }
+    };
+    
+    initServices();
+  }, []);
+
   // Auto-fill prompt based on form data
   useEffect(() => {
     const generatePrompt = () => {
@@ -827,6 +849,11 @@ const CreateAppPage: React.FC = () => {
         enableDatabase, enablePayments, authProvider, customLayoutElements, useDefaultSettings
       } = formData;
       
+      // Definir integrações selecionadas primeiro
+      const selectedIntegrations = integrations && Object.keys(integrations).length > 0 
+        ? Object.keys(integrations).filter(key => integrations[key]?.enabled)
+        : [];
+
       // Criar estrutura JSON seguindo melhores práticas de engenharia de prompt
       const promptStructure = {
         context: "Você é um desenvolvedor especialista em criar aplicações modernas e funcionais. Sua tarefa é gerar código limpo, bem estruturado e seguindo as melhores práticas de desenvolvimento.",
@@ -868,7 +895,7 @@ const CreateAppPage: React.FC = () => {
             provider: paymentProvider || "none"
           }
         },
-        integrations: [],
+        integrations: selectedIntegrations,
         requirements: [
           "Código limpo e bem documentado",
           "Estrutura de pastas organizada",
@@ -889,10 +916,7 @@ const CreateAppPage: React.FC = () => {
       };
 
       // Adicionar integrações selecionadas
-      if (integrations && Object.keys(integrations).length > 0) {
-        const selectedIntegrations = Object.keys(integrations).filter(key => integrations[key]?.enabled);
-        
-        if (selectedIntegrations.length > 0) {
+      if (selectedIntegrations.length > 0) {
           const integrationMap = {
             'openai': { name: 'OpenAI', description: 'Integração com GPT-4, ChatGPT e DALL-E' },
             'anthropic': { name: 'Anthropic Claude', description: 'Integração com Claude AI Assistant' },
@@ -912,7 +936,6 @@ const CreateAppPage: React.FC = () => {
             api_key_required: true
           }));
         }
-      }
 
       // Adicionar elementos customizados se aplicável
       if (menuStructure === 'custom' && formData.customLayoutElements.length > 0) {
@@ -928,7 +951,30 @@ const CreateAppPage: React.FC = () => {
     };
 
     generatePrompt();
-  }, [formData]);
+  }, [
+    formData.name,
+    formData.description,
+    formData.appType,
+    formData.platformType,
+    formData.frontendStack,
+    formData.cssFramework,
+    formData.colorTheme,
+    formData.mainFont,
+    formData.layoutStyle,
+    formData.menuStructure,
+    formData.enableAuth,
+    formData.authType,
+    formData.authProvider,
+    formData.adminUsername,
+    formData.adminPassword,
+    formData.enableDatabase,
+    formData.databaseType,
+    formData.enablePayments,
+    formData.paymentProvider,
+    formData.useDefaultSettings,
+    formData.integrations,
+    formData.customLayoutElements
+  ]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -941,6 +987,23 @@ const CreateAppPage: React.FC = () => {
   const handleLayoutChange = (layoutValue: string) => {
     setFormData(prev => ({ ...prev, layoutStyle: layoutValue }));
   };
+
+  // Funções específicas para evitar loop infinito
+  const handleUseDefaultSettingsChange = useCallback((value: boolean) => {
+    setFormData(prev => ({ ...prev, useDefaultSettings: value }));
+  }, []);
+
+  const handleFrontendStackChange = useCallback((value: string) => {
+    setFormData(prev => ({ ...prev, frontendStack: value }));
+  }, []);
+
+  const handleCssFrameworkChange = useCallback((value: string) => {
+    setFormData(prev => ({ ...prev, cssFramework: value }));
+  }, []);
+
+  const handleMainFontChange = useCallback((value: string) => {
+    setFormData(prev => ({ ...prev, mainFont: value }));
+  }, []);
 
   // Validação de campos obrigatórios por etapa
   const validateStep = (step: number): boolean => {
@@ -1053,6 +1116,8 @@ const CreateAppPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('🔍 [DEBUG] handleSubmit iniciado');
+    
     if (!formData.name.trim()) {
       error('Nome obrigatório', 'Por favor, insira um nome para o projeto');
       return;
@@ -1060,18 +1125,88 @@ const CreateAppPage: React.FC = () => {
 
     setIsCreating(true);
     
-    // Redirecionar para a página de compilação com os dados do app
-    navigate('/compilation', { 
-      state: { 
-        appConfig: formData 
-      } 
-    });
+    try {
+      console.log('🔍 [DEBUG] Verificando inicialização dos serviços...');
+      
+      // Verificar se os serviços foram inicializados
+      if (!servicesInitialized) {
+        console.log('❌ [DEBUG] Serviços não inicializados');
+        error('Serviços não inicializados', 'Aguarde a inicialização dos serviços antes de criar o projeto.');
+        setIsCreating(false);
+        return;
+      }
+
+      console.log('✅ [DEBUG] Serviços inicializados, criando projeto...');
+
+      // Criar um user_id padrão se não existir
+      const userId = 'default-user';
+
+      const projectData = {
+        user_id: userId,
+        title: formData.name,
+        description: formData.description || '',
+        config: {
+          appType: formData.appType,
+          frontendStack: formData.frontendStack,
+          cssFramework: formData.cssFramework,
+          colorTheme: formData.colorTheme,
+          mainFont: formData.mainFont,
+          layoutStyle: formData.layoutStyle,
+          enableAuth: formData.enableAuth,
+          enableDatabase: formData.enableDatabase,
+          enablePayments: formData.enablePayments,
+          authProvider: formData.authProvider,
+          databaseType: formData.databaseType,
+          paymentProvider: formData.paymentProvider,
+          platformType: formData.platformType,
+          menuStructure: formData.menuStructure,
+          adminUsername: formData.adminUsername,
+          adminPassword: formData.adminPassword,
+          authType: formData.authType,
+          customLayoutElements: formData.customLayoutElements
+        }
+      };
+
+      console.log('🔍 [DEBUG] Dados do projeto a serem salvos:', {
+        title: projectData.title,
+        description: projectData.description,
+        configKeys: Object.keys(projectData.config)
+      });
+
+      // Salvar projeto no SQLite local com a estrutura correta
+      const projectId = await database.createProject(projectData);
+
+      console.log('✅ [DEBUG] Projeto criado com ID:', projectId);
+
+      success('Projeto criado!', `O projeto "${formData.name}" foi criado com sucesso!`);
+      
+      console.log('🔍 [DEBUG] Navegando para página de compilação...');
+      
+      // Navegar para a página de compilação com os dados do projeto
+      navigate('/compilation', {
+        state: {
+          projectId,
+          projectName: formData.name,
+          appConfig: formData,
+          isNewProject: true
+        }
+      });
+      
+    } catch (err) {
+      console.error('❌ [DEBUG] Erro ao criar projeto:', err);
+      console.error('❌ [DEBUG] Stack trace:', err.stack);
+      error('Erro na criação', 'Não foi possível criar o app. Verifique se a API Gemini está configurada.');
+      setIsCreating(false);
+    }
   };
 
-  const handleCompilationComplete = (code: string) => {
+  const handleCompilationComplete = async (code: string) => {
     setGeneratedCode(code);
     setCompilationCompleted(true);
     setIsCreating(false);
+    
+    // Não criar projeto aqui - ele já foi criado no handleSubmit
+    // Apenas criar a versão 1 com o código gerado
     success('App gerado!', `O app "${formData.name}" foi gerado com sucesso!`);
   };
 
@@ -1141,7 +1276,7 @@ const CreateAppPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Configurações Padrão */}
               <div
-                onClick={() => handleInputChange({ target: { name: 'useDefaultSettings', value: true } })}
+                onClick={() => handleUseDefaultSettingsChange(true)}
                 className={`group relative p-8 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl min-h-[200px] flex flex-col ${
                   formData.useDefaultSettings === true
                     ? 'border-green-500 bg-gradient-to-br from-green-500/20 to-green-600/10 shadow-lg shadow-green-500/25'
@@ -1194,7 +1329,7 @@ const CreateAppPage: React.FC = () => {
 
               {/* Personalizar */}
               <div
-                onClick={() => handleInputChange({ target: { name: 'useDefaultSettings', value: false } })}
+                onClick={() => handleUseDefaultSettingsChange(false)}
                 className={`group relative p-8 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl min-h-[200px] flex flex-col ${
                   formData.useDefaultSettings === false
                     ? 'border-blue-500 bg-gradient-to-br from-blue-500/20 to-blue-600/10 shadow-lg shadow-blue-500/25'
@@ -1312,80 +1447,10 @@ const CreateAppPage: React.FC = () => {
               Stack Frontend *
             </label>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                {
-                  value: 'React',
-                  title: '⚛️ React',
-                  description: 'Biblioteca JavaScript popular',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-cyan-400" },
-                    React.createElement('circle', { cx: "12", cy: "12", r: "2", fill: "currentColor" }),
-                    React.createElement('path', { 
-                      d: "M12 1a11 11 0 0 0-11 11 11 11 0 0 0 11 11 11 11 0 0 0 11-11A11 11 0 0 0 12 1zm0 19a8 8 0 1 1 8-8 8 8 0 0 1-8 8z",
-                      fill: "none",
-                      stroke: "currentColor",
-                      strokeWidth: "2"
-                    })
-                  )
-                },
-                {
-                  value: 'Vue',
-                  title: '💚 Vue.js',
-                  description: 'Framework progressivo',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-green-400" },
-                    React.createElement('path', { 
-                      d: "M2 3h3.5L12 15l6.5-12H22L12 21 2 3z",
-                      fill: "currentColor"
-                    })
-                  )
-                },
-                {
-                  value: 'Angular',
-                  title: '🔺 Angular',
-                  description: 'Framework completo Google',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-red-500" },
-                    React.createElement('path', { 
-                      d: "M12 2L2 7l1.5 13L12 22l8.5-2L22 7 12 2zm0 2.5l6.5 11.5h-2l-1.5-3h-6l-1.5 3h-2L12 4.5z",
-                      fill: "currentColor"
-                    })
-                  )
-                },
-                {
-                  value: 'Svelte',
-                  title: '🧡 Svelte',
-                  description: 'Compilador moderno',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-orange-400" },
-                    React.createElement('path', { 
-                      d: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
-                      fill: "currentColor"
-                    })
-                  )
-                },
-                {
-                  value: 'Next.js',
-                  title: '▲ Next.js',
-                  description: 'React com SSR',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-gray-300" },
-                    React.createElement('path', { 
-                      d: "M12 2l10 17.32H2L12 2z",
-                      fill: "currentColor"
-                    })
-                  )
-                },
-                {
-                  value: 'Nuxt.js',
-                  title: '💚 Nuxt.js',
-                  description: 'Vue.js com SSR',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-green-500" },
-                    React.createElement('path', { 
-                      d: "M12 2l10 17.32H2L12 2z",
-                      fill: "currentColor"
-                    })
-                  )
-                }
-              ].map((stack) => (
+              {FRONTEND_STACKS_EXPANDED.map((stack) => (
                 <div
                   key={stack.value}
-                  onClick={() => handleInputChange({ target: { name: 'frontendStack', value: stack.value } })}
+                  onClick={() => handleFrontendStackChange(stack.value)}
                   className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
                     formData.frontendStack === stack.value
                       ? 'border-blue-500 bg-blue-500/10'
@@ -1419,81 +1484,10 @@ const CreateAppPage: React.FC = () => {
               Framework CSS *
             </label>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                {
-                  value: 'TailwindCSS',
-                  title: '🎨 TailwindCSS',
-                  description: 'Utility-first CSS',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-cyan-400" },
-                    React.createElement('path', { 
-                      d: "M12.001 4.8c-3.2 0-5.2 1.6-6 4.8 1.2-1.6 2.6-2.2 4.2-1.8.913.228 1.565.89 2.288 1.624C13.666 10.618 15.027 12 18.001 12c3.2 0 5.2-1.6 6-4.8-1.2 1.6-2.6 2.2-4.2 1.8-.913-.228-1.565-.89-2.288-1.624C16.337 6.182 14.976 4.8 12.001 4.8zm-6 7.2c-3.2 0-5.2 1.6-6 4.8 1.2-1.6 2.6-2.2 4.2-1.8.913.228 1.565.89 2.288 1.624 1.177 1.194 2.538 2.576 5.512 2.576 3.2 0 5.2-1.6 6-4.8-1.2 1.6-2.6 2.2-4.2 1.8-.913-.228-1.565-.89-2.288-1.624C10.337 13.382 8.976 12 6.001 12z",
-                      fill: "currentColor"
-                    })
-                  )
-                },
-                {
-                  value: 'Bootstrap',
-                  title: '🅱️ Bootstrap',
-                  description: 'Framework CSS popular',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-purple-500" },
-                    React.createElement('path', { 
-                      d: "M20 0H4a4 4 0 0 0-4 4v16a4 4 0 0 0 4 4h16a4 4 0 0 0 4-4V4a4 4 0 0 0-4-4zM9 13v-2h4.5c.828 0 1.5.672 1.5 1.5S14.328 14 13.5 14H9zm0-5V6h4c.828 0 1.5.672 1.5 1.5S13.828 9 13 9H9zm4.5 7c1.381 0 2.5-1.119 2.5-2.5 0-.717-.304-1.363-.792-1.818A2.49 2.49 0 0 0 15.5 8.5c0-1.381-1.119-2.5-2.5-2.5H7v12h6.5z",
-                      fill: "currentColor"
-                    })
-                  )
-                },
-                {
-                  value: 'Material-UI',
-                  title: '🎯 Material-UI',
-                  description: 'Design system Google',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-blue-500" },
-                    React.createElement('path', { 
-                      d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
-                      fill: "currentColor"
-                    })
-                  )
-                },
-                {
-                  value: 'Chakra UI',
-                  title: '⚡ Chakra UI',
-                  description: 'Componentes modulares',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-teal-400" },
-                    React.createElement('circle', { cx: "12", cy: "12", r: "10", fill: "none", stroke: "currentColor", strokeWidth: "2" }),
-                    React.createElement('path', { 
-                      d: "M12 6v6l4 2",
-                      stroke: "currentColor",
-                      strokeWidth: "2",
-                      strokeLinecap: "round",
-                      strokeLinejoin: "round"
-                    })
-                  )
-                },
-                {
-                  value: 'Ant Design',
-                  title: '🐜 Ant Design',
-                  description: 'Enterprise UI library',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-blue-600" },
-                    React.createElement('path', { 
-                      d: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
-                      fill: "currentColor"
-                    })
-                  )
-                },
-                {
-                  value: 'Styled Components',
-                  title: '💅 Styled Components',
-                  description: 'CSS-in-JS library',
-                  preview: React.createElement('svg', { viewBox: "0 0 24 24", className: "w-8 h-8 text-pink-400" },
-                    React.createElement('path', { 
-                      d: "M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3z",
-                      fill: "currentColor"
-                    })
-                  )
-                }
-              ].map((framework) => (
+              {CSS_FRAMEWORKS_EXPANDED.map((framework) => (
                 <div
                   key={framework.value}
-                  onClick={() => handleInputChange({ target: { name: 'cssFramework', value: framework.value } })}
+                  onClick={() => handleCssFrameworkChange(framework.value)}
                   className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
                     formData.cssFramework === framework.value
                       ? 'border-blue-500 bg-blue-500/10'
@@ -1582,7 +1576,7 @@ const CreateAppPage: React.FC = () => {
               {FONT_FAMILIES_EXPANDED.map((font) => (
                 <div
                   key={font.value}
-                  onClick={() => handleInputChange({ target: { name: 'mainFont', value: font.value } })}
+                  onClick={() => handleMainFontChange(font.value)}
                   className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
                     formData.mainFont === font.value
                       ? 'border-blue-500 bg-blue-500/10'
@@ -2554,6 +2548,30 @@ const CreateAppPage: React.FC = () => {
             </Button>
           </Link>
           </div>
+          
+          {/* Service Initialization Status */}
+          {!servicesInitialized && !initializationError && (
+            <div className="mt-4 p-3 bg-blue-900/20 border border-blue-700/30 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-400 border-t-transparent"></div>
+                <span className="text-sm text-blue-300">Inicializando serviços...</span>
+              </div>
+            </div>
+          )}
+          
+          {initializationError && (
+            <div className="mt-4 p-3 bg-red-900/20 border border-red-700/30 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="h-4 w-4 rounded-full bg-red-500 flex items-center justify-center">
+                  <span className="text-white text-xs">!</span>
+                </div>
+                <div>
+                  <span className="text-sm text-red-300">Erro na inicialização dos serviços</span>
+                  <p className="text-xs text-red-400 mt-1">{initializationError}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Progress Bar Section - Directly attached */}
@@ -2640,7 +2658,12 @@ const CreateAppPage: React.FC = () => {
                     adminUsername: formData.adminUsername,
                     adminPassword: formData.adminPassword,
                     authType: formData.authType,
-                    customLayoutElements: formData.customLayoutElements
+                    customLayoutElements: formData.customLayoutElements,
+                    // Adicionar campos necessários para o GeminiService
+                    features: [],
+                    integrations: formData.integrations && Object.keys(formData.integrations).length > 0 
+                      ? Object.keys(formData.integrations).filter(key => formData.integrations[key]?.enabled)
+                      : []
                   }}
                   onComplete={handleCompilationComplete}
                   onError={handleCompilationError}

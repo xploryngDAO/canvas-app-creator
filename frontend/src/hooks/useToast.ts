@@ -37,10 +37,15 @@ export const useToast = () => {
     addToast({ type: 'info', title, message });
   }, [addToast]);
 
+  const showToast = useCallback((title: string, type: ToastType = 'info', message?: string) => {
+    addToast({ type, title, message });
+  }, [addToast]);
+
   return {
     toasts,
     addToast,
     removeToast,
+    showToast,
     success,
     error,
     warning,

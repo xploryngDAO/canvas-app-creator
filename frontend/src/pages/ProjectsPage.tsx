@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Play, Eye, Trash2, Calendar, Clock, Code, Palette, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Search, Plus, Eye, Trash2, Calendar, Clock, Code, Palette, ArrowLeft, GitBranch } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Modal from '@/components/ui/Modal';
+import VersionsModal from '@/components/VersionsModal';
 import { useToast } from '@/hooks/useToast';
-import { projectService, Project } from '@/services/projectService';
+import { database, Project } from '@/services/database';
 
 const ProjectsPage: React.FC = () => {
   const { success, error } = useToast();
@@ -20,7 +21,12 @@ const ProjectsPage: React.FC = () => {
     isOpen: false,
     project: null
   });
+  const [versionsModal, setVersionsModal] = useState<{ isOpen: boolean; project: Project | null }>({
+    isOpen: false,
+    project: null
+  });
   const [compilingProjects, setCompilingProjects] = useState<Set<string>>(new Set());
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadProjects();
@@ -33,14 +39,30 @@ const ProjectsPage: React.FC = () => {
   const loadProjects = async () => {
     try {
       setIsLoading(true);
-      const response = await projectService.getAllProjects();
+      const projects = await database.getProjects();
       
-      if (response.success && response.data) {
-        setProjects(response.data);
-      } else {
-        error('Erro ao carregar projetos', response.error || 'Não foi possível carregar os projetos');
-      }
+      // Converter formato do banco local para o formato esperado pela UI
+      const formattedProjects = projects.map(project => ({
+        id: project.id,
+        name: project.title,
+        appType: project.config?.appType || 'web',
+        frontendStack: project.config?.frontendStack || 'react',
+        cssFramework: project.config?.cssFramework || 'tailwind',
+        colorTheme: project.config?.colorTheme || 'blue',
+        mainFont: project.config?.mainFont || 'inter',
+        layoutStyle: project.config?.layoutStyle || 'modern',
+        enableAuth: project.config?.enableAuth || false,
+        enableDatabase: project.config?.enableDatabase || false,
+        enablePayments: project.config?.enablePayments || false,
+        createdAt: project.created_at,
+        updatedAt: project.latest_version_created_at,
+        status: project.code ? 'compiled' : 'draft' as 'active' | 'archived' | 'draft',
+        outputPath: project.code ? `/generated/${project.id}` : undefined
+      }));
+      
+      setProjects(formattedProjects);
     } catch (err) {
+      console.error('Erro ao carregar projetos:', err);
       error('Erro inesperado', 'Ocorreu um erro inesperado ao carregar os projetos');
     } finally {
       setIsLoading(false);
@@ -68,17 +90,21 @@ const ProjectsPage: React.FC = () => {
     setCompilingProjects(prev => new Set(prev).add(project.id));
     
     try {
-      const response = await projectService.compileProject(project.id);
+      // Para projetos locais, a "compilação" é apenas mostrar o código já gerado
+      const localProject = await database.getProject(project.id);
       
-      if (response.success) {
-        success('Compilação iniciada!', `O projeto "${project.name}" está sendo compilado`);
-        // Reload projects to get updated status
-        await loadProjects();
+      if (localProject && localProject.code) {
+        success('Projeto já compilado!', `O projeto "${project.name}" já possui código gerado`);
+        console.log('Código do projeto:', localProject.code);
       } else {
-        error('Erro na compilação', response.error || 'Não foi possível compilar o projeto');
+        error('Código não encontrado', 'Este projeto não possui código gerado. Gere o app primeiro na página de criação.');
       }
+      
+      // Reload projects to get updated status
+      await loadProjects();
     } catch (err) {
-      error('Erro inesperado', 'Ocorreu um erro inesperado durante a compilação');
+      console.error('Erro ao acessar projeto:', err);
+      error('Erro inesperado', 'Ocorreu um erro inesperado ao acessar o projeto');
     } finally {
       setCompilingProjects(prev => {
         const newSet = new Set(prev);
@@ -92,15 +118,12 @@ const ProjectsPage: React.FC = () => {
     if (!deleteModal.project) return;
 
     try {
-      const response = await projectService.deleteProject(deleteModal.project.id);
+      await database.deleteProject(deleteModal.project.id);
       
-      if (response.success) {
-        success('Projeto excluído!', `O projeto "${deleteModal.project.name}" foi excluído com sucesso`);
-        setProjects(prev => prev.filter(p => p.id !== deleteModal.project!.id));
-      } else {
-        error('Erro ao excluir', response.error || 'Não foi possível excluir o projeto');
-      }
+      success('Projeto excluído!', `O projeto "${deleteModal.project.name}" foi excluído com sucesso`);
+      setProjects(prev => prev.filter(p => p.id !== deleteModal.project!.id));
     } catch (err) {
+      console.error('Erro ao excluir projeto:', err);
       error('Erro inesperado', 'Ocorreu um erro inesperado ao excluir o projeto');
     } finally {
       setDeleteModal({ isOpen: false, project: null });
@@ -109,9 +132,10 @@ const ProjectsPage: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'text-green-400';
-      case 'compiling': return 'text-yellow-400';
-      case 'error': return 'text-red-400';
+      case 'compiled': return 'text-green-400';
+      case 'active': return 'text-blue-400';
+      case 'draft': return 'text-yellow-400';
+      case 'archived': return 'text-gray-400';
       default: return 'text-gray-400';
     }
   };
@@ -275,17 +299,12 @@ const ProjectsPage: React.FC = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleCompile(project)}
-                        disabled={compilingProjects.has(project.id) || project.status === 'compiling'}
+                        onClick={() => setVersionsModal({ isOpen: true, project })}
                         className="flex-1 text-xs sm:text-sm"
                       >
-                        <Play size={14} className="mr-1" />
-                        <span className="hidden sm:inline">
-                          {compilingProjects.has(project.id) ? 'Compilando...' : 'Compilar'}
-                        </span>
-                        <span className="sm:hidden">
-                          {compilingProjects.has(project.id) ? '...' : 'Play'}
-                        </span>
+                        <GitBranch size={14} className="mr-1" />
+                        <span className="hidden sm:inline">Ver Versões</span>
+                        <span className="sm:hidden">Versões</span>
                       </Button>
                       
                       {project.outputPath && (
@@ -344,6 +363,43 @@ const ProjectsPage: React.FC = () => {
             </div>
           </div>
         </Modal>
+
+        {/* Versions Modal */}
+        {versionsModal.project && (
+          <VersionsModal
+            isOpen={versionsModal.isOpen}
+            onClose={() => setVersionsModal({ isOpen: false, project: null })}
+            projectId={versionsModal.project.id}
+            projectTitle={versionsModal.project.name}
+            onLoadVersion={(versionId, code) => {
+              // Encontrar a versão específica para obter o version_number
+              const loadVersion = async () => {
+                try {
+                  const versions = await database.getVersions(versionsModal.project!.id);
+                  const version = versions.find(v => v.id === versionId);
+                  
+                  if (version) {
+                    console.log('🔍 [PROJECTS_PAGE] Navegando para IDE com versão:', {
+                      projectId: versionsModal.project!.id,
+                      versionNumber: version.version_number,
+                      versionId
+                    });
+                    
+                    navigate(`/ide/${versionsModal.project!.id}/${version.version_number}`);
+                  } else {
+                    console.error('❌ [PROJECTS_PAGE] Versão não encontrada:', versionId);
+                    error('Versão não encontrada');
+                  }
+                } catch (err) {
+                  console.error('❌ [PROJECTS_PAGE] Erro ao carregar versão:', err);
+                  error('Erro ao carregar versão');
+                }
+              };
+              
+              loadVersion();
+            }}
+          />
+        )}
       </div>
     </div>
   );

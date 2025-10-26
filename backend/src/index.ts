@@ -17,7 +17,7 @@ initializeDatabase();
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:3010',
+  origin: ['http://localhost:3010', 'http://127.0.0.1:3010'],
   credentials: true
 }));
 app.use(express.json());

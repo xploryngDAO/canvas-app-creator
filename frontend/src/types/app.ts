@@ -19,6 +19,9 @@ export interface AppConfig {
   adminPassword?: string;
   authType: string;
   customLayoutElements: string[];
+  // Campos necessários para o GeminiService
+  features?: string[];
+  integrations?: string[];
 }
 
 export interface CompilationState {
