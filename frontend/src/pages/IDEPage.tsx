@@ -202,8 +202,7 @@ const IDEPage: React.FC<IDEPageProps> = () => {
 
           // Configurar o appConfig baseado no projeto
           const config: AppConfig = {
-            id: project.id,
-            appName: project.title,
+            name: project.title,
             description: project.description || '',
             ...project.config
           };
@@ -458,21 +457,21 @@ const IDEPage: React.FC<IDEPageProps> = () => {
     console.log('Enviando mensagem:', chatMessage);
     
     // Salvar versão se há um projeto carregado
-    if (appConfig?.id) {
+    if (projectId) {
       try {
         // Obter o número da próxima versão
-        const existingVersions = await database.getVersions(appConfig.id);
+        const existingVersions = await database.getVersions(projectId!);
         const nextVersionNumber = existingVersions.length + 1;
         
         // Criar nova versão com o prompt atual
         await database.createVersion({
-          project_id: appConfig.id,
+          project_id: projectId!,
           version_number: nextVersionNumber,
           prompt: chatMessage.trim(),
           code: generatedCode || ''
         });
         
-        console.log(`Versão ${nextVersionNumber} criada para o projeto ${appConfig.id}`);
+        console.log(`Versão ${nextVersionNumber} criada para o projeto ${projectId}`);
       } catch (error) {
         console.error('Erro ao criar versão:', error);
       }
@@ -533,7 +532,7 @@ const IDEPage: React.FC<IDEPageProps> = () => {
         hasGeneratedCode: !!generatedCode,
         codeLength: generatedCode?.length || 0,
         filesCount: generatedFiles.length,
-        appConfigName: appConfig?.appName || appConfig?.name,
+        appConfigName: appConfig?.name || 'Canvas App',
         projectId
       });
       
@@ -551,11 +550,10 @@ const IDEPage: React.FC<IDEPageProps> = () => {
       };
       
       const projectName = sanitizeName(
-        appConfig?.appName || 
-        appConfig?.name || 
-        projectId || 
-        'projeto-gerado'
-      );
+          appConfig?.name || 
+          projectId || 
+          'projeto-gerado'
+        );
       
       console.log('📝 Nome do projeto sanitizado:', projectName);
       
@@ -571,7 +569,7 @@ const IDEPage: React.FC<IDEPageProps> = () => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="${appConfig?.description || 'Aplicação gerada pelo Canvas App Creator'}">
-    <title>${appConfig?.appName || appConfig?.name || 'Canvas App'}</title>
+    <title>${appConfig?.name || 'Canvas App'}</title>
 </head>
 <body>
 ${processedHtml}
@@ -679,7 +677,7 @@ ${processedHtml}
       // Adicionar README.md melhorado se não existir
       const hasReadme = generatedFiles.some(file => file?.path?.toLowerCase()?.includes('readme'));
       if (!hasReadme) {
-        const readme = `# ${appConfig?.appName || appConfig?.name || 'Canvas App'}
+        const readme = `# ${appConfig?.name || 'Canvas App'}
 
 ${appConfig?.description || 'Aplicação gerada pelo Canvas App Creator'}
 
@@ -718,8 +716,8 @@ Este projeto foi gerado automaticamente pelo **Canvas App Creator**, uma ferrame
 - **HTML5** - Estrutura da aplicação
 - **CSS3** - Estilização e layout
 - **JavaScript** - Interatividade e lógica
-- **${appConfig?.frontend_stack || 'Vanilla JS'}** - Framework frontend
-- **${appConfig?.css_framework || 'CSS Puro'}** - Framework de estilos
+- **${appConfig?.frontendStack || 'Vanilla JS'}** - Framework frontend
+- **${appConfig?.cssFramework || 'CSS Puro'}** - Framework de estilos
 
 ## 📁 Estrutura do projeto
 

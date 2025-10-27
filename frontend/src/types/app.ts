@@ -21,7 +21,7 @@ export interface AppConfig {
   customLayoutElements: string[];
   // Campos necessários para o GeminiService
   features?: string[];
-  integrations?: string[];
+  integrations?: Record<string, any>;
 }
 
 export interface CompilationState {

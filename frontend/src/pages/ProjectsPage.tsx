@@ -10,18 +10,35 @@ import VersionsModal from '@/components/VersionsModal';
 import { useToast } from '@/hooks/useToast';
 import { database, Project } from '@/services/database';
 
+interface FormattedProject extends Project {
+  name: string;
+  appType: string;
+  frontendStack: string;
+  cssFramework: string;
+  colorTheme: string;
+  mainFont: string;
+  layoutStyle: string;
+  enableAuth: boolean;
+  enableDatabase: boolean;
+  enablePayments: boolean;
+  createdAt: string;
+  updatedAt: string;
+  status: 'active' | 'archived' | 'draft' | 'compiled';
+  outputPath?: string;
+}
+
 const ProjectsPage: React.FC = () => {
   const { success, error } = useToast();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<FormattedProject[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<FormattedProject[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
-  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; project: Project | null }>({
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; project: FormattedProject | null }>({
     isOpen: false,
     project: null
   });
-  const [versionsModal, setVersionsModal] = useState<{ isOpen: boolean; project: Project | null }>({
+  const [versionsModal, setVersionsModal] = useState<{ isOpen: boolean; project: FormattedProject | null }>({
     isOpen: false,
     project: null
   });
@@ -43,7 +60,8 @@ const ProjectsPage: React.FC = () => {
       
       // Converter formato do banco local para o formato esperado pela UI
       const formattedProjects = projects.map(project => ({
-        id: project.id,
+        ...project,
+        title: project.title,
         name: project.title,
         appType: project.config?.appType || 'web',
         frontendStack: project.config?.frontendStack || 'react',
@@ -56,7 +74,7 @@ const ProjectsPage: React.FC = () => {
         enablePayments: project.config?.enablePayments || false,
         createdAt: project.created_at,
         updatedAt: project.latest_version_created_at,
-        status: project.code ? 'compiled' : 'draft' as 'active' | 'archived' | 'draft',
+        status: project.code ? 'compiled' : 'draft' as 'active' | 'archived' | 'draft' | 'compiled',
         outputPath: project.code ? `/generated/${project.id}` : undefined
       }));
       
@@ -74,7 +92,7 @@ const ProjectsPage: React.FC = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(project =>
-        project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.appType.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -94,7 +112,7 @@ const ProjectsPage: React.FC = () => {
       const localProject = await database.getProject(project.id);
       
       if (localProject && localProject.code) {
-        success('Projeto já compilado!', `O projeto "${project.name}" já possui código gerado`);
+        success('Projeto já compilado!', `O projeto "${project.title}" já possui código gerado`);
         console.log('Código do projeto:', localProject.code);
       } else {
         error('Código não encontrado', 'Este projeto não possui código gerado. Gere o app primeiro na página de criação.');
@@ -120,7 +138,7 @@ const ProjectsPage: React.FC = () => {
     try {
       await database.deleteProject(deleteModal.project.id);
       
-      success('Projeto excluído!', `O projeto "${deleteModal.project.name}" foi excluído com sucesso`);
+      success('Projeto excluído!', `O projeto "${deleteModal.project.title}" foi excluído com sucesso`);
       setProjects(prev => prev.filter(p => p.id !== deleteModal.project!.id));
     } catch (err) {
       console.error('Erro ao excluir projeto:', err);
@@ -264,7 +282,7 @@ const ProjectsPage: React.FC = () => {
               <Card key={project.id} hover className="h-full">
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-lg sm:text-xl font-semibold text-white truncate">{project.name}</h3>
+                    <h3 className="text-lg sm:text-xl font-semibold text-white truncate">{project.title}</h3>
                     <span className={`text-xs sm:text-sm font-medium ${getStatusColor(project.status)}`}>
                       {getStatusText(project.status)}
                     </span>
@@ -290,7 +308,7 @@ const ProjectsPage: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock size={12} className="sm:w-3.5 sm:h-3.5" />
-                        <span className="truncate">Atualizado: {formatDate(project.updatedAt)}</span>
+                        <span className="truncate">Atualizado: {formatDate(project.latest_version_created_at)}</span>
                       </div>
                     </div>
 
@@ -307,11 +325,11 @@ const ProjectsPage: React.FC = () => {
                         <span className="sm:hidden">Versões</span>
                       </Button>
                       
-                      {project.outputPath && (
+                      {project.code && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => window.open(project.outputPath, '_blank')}
+                          onClick={() => window.open(`/generated/${project.id}`, '_blank')}
                           className="px-2 sm:px-3"
                         >
                           <Eye size={14} />
@@ -342,7 +360,7 @@ const ProjectsPage: React.FC = () => {
         >
           <div className="space-y-4">
             <p className="text-gray-300">
-              Tem certeza que deseja excluir o projeto "{deleteModal.project?.name}"?
+              Tem certeza que deseja excluir o projeto "{deleteModal.project?.title}"?
             </p>
             <p className="text-sm text-gray-400">
               Esta ação não pode ser desfeita.
@@ -370,7 +388,7 @@ const ProjectsPage: React.FC = () => {
             isOpen={versionsModal.isOpen}
             onClose={() => setVersionsModal({ isOpen: false, project: null })}
             projectId={versionsModal.project.id}
-            projectTitle={versionsModal.project.name}
+            projectTitle={versionsModal.project.title}
             onLoadVersion={(versionId, code) => {
               // Encontrar a versão específica para obter o version_number
               const loadVersion = async () => {

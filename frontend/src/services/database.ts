@@ -286,6 +286,13 @@ class SQLiteManager {
     }));
   }
 
+  async deleteSetting(key: string): Promise<void> {
+    if (!this.db) return;
+
+    this.db.run("DELETE FROM settings WHERE key = ?", [key]);
+    this.saveToLocalStorage();
+  }
+
   // === VERSIONS ===
   async createVersion(version: Omit<ProjectVersion, 'id' | 'created_at'>): Promise<string> {
     if (!this.db) throw new Error('Database not initialized');

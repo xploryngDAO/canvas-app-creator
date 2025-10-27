@@ -7,16 +7,47 @@ export interface GeminiResponse {
 }
 
 export interface AppConfig {
-  name: string;
-  description: string;
-  type: string;
-  frontend: string;
-  css: string;
-  theme: any;
-  layout: string;
-  menu: any;
-  features: string[];
-  integrations: string[];
+  // Informações básicas
+  name?: string;
+  description?: string;
+  appType?: string;
+  
+  // Stack tecnológico
+  frontendStack?: string;
+  cssFramework?: string;
+  
+  // Design e aparência
+  colorTheme?: string;
+  mainFont?: string;
+  layoutStyle?: string;
+  
+  // Estrutura e navegação
+  menuStructure?: string;
+  customLayoutElements?: any[];
+  
+  // Funcionalidades
+  enableAuth?: boolean;
+  enableDatabase?: boolean;
+  enablePayments?: boolean;
+  
+  // Provedores de serviços
+  authProvider?: string;
+  databaseType?: string;
+  paymentProvider?: string;
+  
+  // Configurações de plataforma
+  platformType?: string;
+  
+  // Autenticação específica
+  authType?: string;
+  adminUsername?: string;
+  adminPassword?: string;
+  
+  // Integrações
+  integrations?: Record<string, any>;
+  
+  // Arrays de funcionalidades (mantidos para compatibilidade)
+  features?: string[];
 }
 
 class GeminiService {
@@ -279,28 +310,98 @@ class GeminiService {
   }
 
   private buildPrompt(config: AppConfig): string {
-    // Verificações de segurança para evitar erros de undefined
-    const features = config.features || [];
-    const integrations = config.integrations || [];
+    // Construir prompt detalhado usando TODAS as configurações do Wizard
+    let prompt = `Crie uma aplicação ${config.appType} chamada "${config.name}": ${config.description}.\n\n`;
     
-    const featuresText = features.length > 0 ? features.join(', ') : '';
-    const integrationsText = integrations.length > 0 ? integrations.join(', ') : '';
-
-    // Prompt otimizado e conciso (similar ao index_sqlite.html)
-    let prompt = `Crie um app web ${config.type} chamado "${config.name}": ${config.description}. Use ${config.frontend} + ${config.css}`;
+    // Stack tecnológico
+    prompt += `STACK TECNOLÓGICO:\n`;
+    prompt += `- Frontend: ${config.frontendStack}\n`;
+    prompt += `- CSS Framework: ${config.cssFramework}\n`;
+    prompt += `- Plataforma: ${config.platformType}\n\n`;
     
-    if (featuresText) {
-      prompt += `. Funcionalidades: ${featuresText}`;
+    // Design e aparência
+    prompt += `DESIGN E APARÊNCIA:\n`;
+    prompt += `- Tema de cores: ${config.colorTheme}\n`;
+    prompt += `- Fonte principal: ${config.mainFont}\n`;
+    prompt += `- Estilo de layout: ${config.layoutStyle}\n`;
+    prompt += `- Estrutura de menu: ${config.menuStructure}\n\n`;
+    
+    // Funcionalidades habilitadas
+    const enabledFeatures = [];
+    if (config.enableAuth) {
+      enabledFeatures.push(`Autenticação (${config.authType} via ${config.authProvider})`);
+      if (config.adminUsername && config.adminPassword) {
+        enabledFeatures.push(`Admin: ${config.adminUsername}/${config.adminPassword}`);
+      }
+    }
+    if (config.enableDatabase) {
+      enabledFeatures.push(`Banco de dados (${config.databaseType})`);
+    }
+    if (config.enablePayments) {
+      enabledFeatures.push(`Pagamentos (${config.paymentProvider})`);
     }
     
-    if (integrationsText) {
-      prompt += `. Integrações: ${integrationsText}`;
+    if (enabledFeatures.length > 0) {
+      prompt += `FUNCIONALIDADES:\n`;
+      enabledFeatures.forEach(feature => prompt += `- ${feature}\n`);
+      prompt += `\n`;
     }
     
-    prompt += `. Retorne APENAS código HTML completo, responsivo, funcional.`;
+    // Features array (funcionalidades adicionais)
+    if (config.features && config.features.length > 0) {
+      prompt += `FEATURES ADICIONAIS:\n`;
+      config.features.forEach(feature => prompt += `- ${feature}\n`);
+      prompt += `\n`;
+    }
+    
+    // Integrações
+    if (config.integrations && Object.keys(config.integrations).length > 0) {
+      prompt += `INTEGRAÇÕES:\n`;
+      Object.entries(config.integrations).forEach(([key, value]) => {
+        if (value && typeof value === 'object' && value.enabled) {
+          prompt += `- ${key}\n`;
+        }
+      });
+      prompt += `\n`;
+    }
+    
+    // Elementos de layout personalizados
+    if (config.customLayoutElements && config.customLayoutElements.length > 0) {
+      prompt += `ELEMENTOS DE LAYOUT PERSONALIZADOS:\n`;
+      config.customLayoutElements.forEach(element => {
+        prompt += `- ${JSON.stringify(element)}\n`;
+      });
+      prompt += `\n`;
+    }
+    
+    // Instruções finais
+    prompt += `INSTRUÇÕES FINAIS:\n`;
+    prompt += `- Retorne APENAS código HTML completo, responsivo e funcional\n`;
+    prompt += `- Implemente layout com menus FIXOS que NÃO fazem scroll\n`;
+    prompt += `- Use position: fixed para header/navbar e sidebar\n`;
+    prompt += `- APENAS o conteúdo principal deve ter overflow-y: auto\n`;
+    prompt += `- Siga rigorosamente o tema de cores ${config.colorTheme}\n`;
+    prompt += `- Use a fonte ${config.mainFont} como fonte principal\n`;
+    prompt += `- Implemente a estrutura de menu ${config.menuStructure}\n`;
+    prompt += `- Garanta compatibilidade com ${config.platformType}\n`;
 
-    console.log('🔍 [DEBUG] Prompt otimizado:', prompt);
+    console.log('🔍 [DEBUG] Prompt completo construído:', prompt);
     console.log('🔍 [DEBUG] Tamanho do prompt:', prompt.length, 'caracteres');
+    console.log('🔍 [DEBUG] Configurações utilizadas:', {
+      appType: config.appType,
+      frontendStack: config.frontendStack,
+      cssFramework: config.cssFramework,
+      colorTheme: config.colorTheme,
+      mainFont: config.mainFont,
+      layoutStyle: config.layoutStyle,
+      menuStructure: config.menuStructure,
+      enableAuth: config.enableAuth,
+      enableDatabase: config.enableDatabase,
+      enablePayments: config.enablePayments,
+      featuresCount: config.features?.length || 0,
+      integrationsCount: Object.keys(config.integrations || {}).length,
+      customElementsCount: config.customLayoutElements?.length || 0
+    });
     
     return prompt;
   }
@@ -569,65 +670,66 @@ class GeminiService {
   }
 
   /**
-   * Constrói um system prompt adaptativo baseado na abordagem de responsividade
+   * Constrói um system prompt simplificado que colabora com o customPrompt
    */
   private buildAdaptiveSystemPrompt(approach: 'mobile-first' | 'desktop-first'): string {
-    const baseInstructions = `Você é um desenvolvedor web especialista. Crie um aplicativo web completo usando as tecnologias e frameworks especificados no prompt personalizado.
+    return `Você é um desenvolvedor web especialista. Crie um aplicativo web completo seguindo EXATAMENTE as especificações do prompt personalizado.
 
-INSTRUÇÕES FUNDAMENTAIS:
+INSTRUÇÕES BÁSICAS:
 - Retorne APENAS o código HTML completo, sem explicações adicionais
-- Use as tecnologias, frameworks e bibliotecas especificadas no prompt personalizado
-- Implemente a estrutura e funcionalidades conforme solicitado
+- Use TODAS as tecnologias, frameworks, cores, fontes e configurações especificadas no prompt personalizado
+- Implemente TODAS as funcionalidades e estruturas conforme solicitado no prompt personalizado
+- Respeite COMPLETAMENTE o sistema de design especificado (cores, fontes, layout)
 - Garanta que o código seja funcional e completamente responsivo
-- Use breakpoints responsivos apropriados para a tecnologia escolhida
-- Siga as melhores práticas de acessibilidade (WCAG 2.1)
-- Otimize para performance, SEO e experiência do usuário
-- Mantenha consistência com o sistema de design especificado
+- Siga as melhores práticas de acessibilidade e performance
 
-QUALIDADE DE CÓDIGO (ALTA PRIORIDADE):
-- Use HTML5 semântico com tags apropriadas (header, nav, main, section, article, aside, footer)
-- Implemente meta tags essenciais: viewport, description, charset, og:tags
-- Adicione estrutura de dados JSON-LD quando relevante
-- Use lazy loading para imagens: loading="lazy"
-- Implemente preload para recursos críticos
-- Garanta contraste adequado (mínimo 4.5:1 para texto normal)
-- Use aria-labels e roles para acessibilidade
-- Implemente skip links para navegação por teclado
-- Otimize Critical Rendering Path com CSS inline para above-the-fold
-- Use CSS Grid e Flexbox de forma eficiente
-- Implemente Progressive Enhancement
-- Adicione estados de hover, focus e active consistentes
-- Use animações CSS performáticas (transform, opacity)
-- Implemente error boundaries e fallbacks
-- Garanta que funcione sem JavaScript (quando possível)`;
+LAYOUT FIXO OBRIGATÓRIO:
+- SEMPRE implemente menus FIXOS que não fazem scroll
+- Header/navbar: position: fixed no topo
+- Sidebar (se especificada): position: fixed na lateral
+- Footer (se especificado): position: fixed na parte inferior
+- APENAS o conteúdo principal deve ter scroll vertical
+- Use calc() para altura: calc(100vh - altura_header - altura_footer)
 
-    if (approach === 'mobile-first') {
-      return `${baseInstructions}
+RESTRIÇÕES DE LAYOUT RESPONSIVO:
+- O conteúdo principal NUNCA deve permitir scroll horizontal em nenhuma resolução
+- TODOS os componentes devem se adaptar responsivamente para caber na largura disponível
+- Implementar breakpoints obrigatórios: 320px, 480px, 768px, 1024px, 1200px
+- Usar overflow-x: hidden no body e container principal para prevenir scroll horizontal
+- Garantir que imagens, tabelas e elementos largos sejam responsivos (max-width: 100%)
 
-ABORDAGEM MOBILE-FIRST:
-- Priorize a experiência mobile como base do design
-- Elementos touch-friendly (mínimo 44px de altura para botões e áreas clicáveis)
-- Layout flexível que funciona perfeitamente em telas pequenas (320px+)
-- Use breakpoints progressivos: mobile → tablet (768px+) → desktop (1024px+)
-- Navegação otimizada para mobile (menu colapsável, navegação inferior quando apropriado)
-- Conteúdo hierarquizado para leitura e interação vertical
-- Imagens e mídia responsivas com carregamento otimizado
-- Prioridade de teste: mobile (375px), tablet (768px), desktop (1200px+)
-- Gestos e interações naturais para dispositivos touch`;
-    } else {
-      return `${baseInstructions}
+DIRETRIZES PARA VERSÃO MOBILE:
+- Para dispositivos móveis (até 768px), implementar:
+  * Barra de navegação inferior fixa para acesso rápido (máximo 5 itens principais)
+  * Barra superior fixa para elementos críticos (logo, busca, perfil)
+  * Menu hambúrguer overlay quando houver mais de 5 opções de navegação
+  * Transformar sidebars em drawers/overlays que deslizam da lateral
+- Priorizar navegação por toque com áreas mínimas de 48x48px
+- Implementar gestos intuitivos (swipe, tap, long press)
 
-ABORDAGEM DESKTOP-FIRST:
-- Priorize interfaces produtivas e eficientes para desktop
-- Layout otimizado para telas grandes com aproveitamento do espaço disponível
-- Navegação horizontal com menus expandidos e sidebars quando apropriado
-- Aproveite o espaço para dashboards, visualizações e interfaces complexas
-- Use breakpoints regressivos: desktop → tablet (1024px-) → mobile (768px-)
-- Mantenha funcionalidade completa em mobile através de adaptações inteligentes
-- Elementos de interface otimizados para mouse e teclado, mas acessíveis em touch
-- Prioridade de teste: desktop (1200px+), tablet (768px), mobile (375px)
-- Atalhos de teclado e interações avançadas quando relevante`;
-    }
+REQUISITOS DE IMPLEMENTAÇÃO MOBILE:
+- Utilizar CSS media queries específicas: @media (max-width: 768px)
+- Garantir redimensionamento proporcional de TODOS os componentes
+- Testar compatibilidade em viewports de 320px a 768px de largura
+- Validar ausência total de scroll horizontal em todos os cenários
+- Implementar viewport meta tag: <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+CRITÉRIOS DE QUALIDADE RESPONSIVA:
+- Layout deve permanecer estável sem distorções em qualquer resolução
+- Elementos interativos devem manter área de toque mínima de 48x48px
+- Transições entre modos de menu devem ser suaves (transition: 0.3s ease)
+- Textos devem ser legíveis sem zoom (mínimo 16px em mobile)
+- Botões e links devem ter espaçamento adequado para evitar toques acidentais
+- Implementar estados hover/focus visíveis para acessibilidade
+
+RESPONSIVIDADE ${approach.toUpperCase()}:
+- Implemente breakpoints apropriados para a abordagem ${approach}
+- Em mobile: transforme sidebar em menu hambúrguer overlay
+- Mantenha funcionalidade completa em todas as resoluções
+- Use media queries para ajustar layout conforme necessário
+- Priorize performance em dispositivos móveis (lazy loading, otimização de imagens)
+
+PRIORIDADE ABSOLUTA: Siga EXATAMENTE todas as configurações do prompt personalizado - cores, fontes, layout, funcionalidades e integrações especificadas.`;
   }
 }
 

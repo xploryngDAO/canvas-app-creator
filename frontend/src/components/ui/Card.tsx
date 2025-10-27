@@ -6,13 +6,15 @@ interface CardProps {
   className?: string;
   hover?: boolean;
   gradient?: boolean;
+  style?: React.CSSProperties;
 }
 
 const Card: React.FC<CardProps> = ({
   children,
   className,
   hover = false,
-  gradient = false
+  gradient = false,
+  style
 }) => {
   return (
     <div
@@ -24,6 +26,7 @@ const Card: React.FC<CardProps> = ({
         hover && 'hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10 hover:scale-105',
         className
       )}
+      style={style}
     >
       {children}
     </div>

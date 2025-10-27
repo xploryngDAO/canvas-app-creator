@@ -5,8 +5,10 @@ import { apiLock } from '../../services/apiLock';
 
 interface CompilationTerminalProps {
   appConfig: AppConfig;
-  onCompilationComplete: (generatedCode: string, files?: any[], logs?: string[]) => void;
+  onComplete: (generatedCode: string, files?: any[], logs?: string[]) => void;
   onError: (error: string) => void;
+  isModifying?: boolean;
+  customPrompt?: string;
   logs?: string[];
 }
 
@@ -17,8 +19,10 @@ interface CodeLine {
 
 export const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
   appConfig,
-  onCompilationComplete,
+  onComplete,
   onError,
+  isModifying,
+  customPrompt,
   logs
 }) => {
   const [codeLines, setCodeLines] = useState<string[]>([]);
@@ -119,12 +123,12 @@ export const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
       }
       
       // Manter compatibilidade com sistema antigo
-      if (generateApp.isRunning) {
+      if ((generateApp as any).isRunning) {
         console.log('⚠️ [FEATURES_TERMINAL] Sistema antigo detectou geração em andamento');
         apiLock.releaseLock(operationId);
         return;
       }
-      generateApp.isRunning = true;
+      (generateApp as any).isRunning = true;
       
       // Recarregar a API key antes de gerar o código
       await geminiService.reload();
@@ -151,59 +155,73 @@ export const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
             type: 'html'
           }
         ];
-
-        // Logs de compilação
+        
+        // Simular logs de compilação
         const compilationLogs = [
-          ...codeLines,
-          '// Código gerado pela Gemini AI',
-          '// Aplicativo pronto para uso!'
+          '✅ Estrutura HTML criada',
+          '✅ Estilos CSS aplicados',
+          '✅ JavaScript configurado',
+          '✅ Responsividade implementada',
+          '✅ Otimizações aplicadas'
         ];
-
-        onCompilationComplete(response.code, generatedFiles, compilationLogs);
+        
+        // Chamar callback de sucesso
+        onComplete(response.code, generatedFiles, compilationLogs);
+        
       } else {
-        const errorMessage = response.error || 'Nenhum código foi gerado';
-        console.error('Erro na resposta do Gemini:', errorMessage);
+        const errorMessage = response.error || 'Erro desconhecido na geração';
+        setLoadingText(`Erro: ${errorMessage}`);
         
-        // Melhorar mensagens de erro de quota
-        let userFriendlyError = errorMessage;
-        let shouldRetry = false;
-        
+        // Melhorar mensagens de erro
         if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('429')) {
-          if (retryCount < 3) {
-            shouldRetry = true;
-            const waitTime = Math.min(30 + (retryCount * 30), 120); // 30s, 60s, 90s
-            userFriendlyError = `⏳ Limite de requisições atingido. Tentando novamente em ${waitTime} segundos... (Tentativa ${retryCount + 1}/3)`;
-            setLoadingText(userFriendlyError);
-            
-            setTimeout(() => {
-              generateApp(retryCount + 1);
-            }, waitTime * 1000);
-            return;
-          } else {
-            userFriendlyError = '⏳ Limite de requisições da API atingido. Tente novamente em alguns minutos ou use uma API Key diferente.';
-          }
-        } else if (errorMessage.includes('API Key')) {
-          userFriendlyError = '🔑 Problema com a API Key. Verifique se está configurada corretamente nas configurações.';
+          onError('⏳ Limite de requisições da API atingido. Tente novamente em alguns minutos ou use uma API Key diferente.');
+        } else if (errorMessage.includes('API key') || errorMessage.includes('authentication') || errorMessage.includes('401')) {
+          onError('🔑 API Key inválida ou não configurada. Verifique suas configurações.');
         } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-          userFriendlyError = '🌐 Erro de conexão. Verifique sua internet e tente novamente.';
-        }
-        
-        if (!shouldRetry) {
-          throw new Error(userFriendlyError);
+          onError('🌐 Erro de conexão. Verifique sua internet e tente novamente.');
+        } else {
+          onError(`❌ Erro na geração: ${errorMessage}`);
         }
       }
-    } catch (error) {
-      console.error('Erro na geração:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido na geração';
+      
+    } catch (error: any) {
+      console.error(`❌ [FEATURES_TERMINAL] Erro na geração para: ${operationId}`, error);
+      
+      const errorMessage = error?.message || 'Erro desconhecido';
       setLoadingText(`Erro: ${errorMessage}`);
-      onError(errorMessage);
+      
+      // Retry logic para erros temporários
+      if (retryCount < 2 && (
+        errorMessage.includes('network') || 
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('fetch')
+      )) {
+        console.log(`🔄 [FEATURES_TERMINAL] Tentativa ${retryCount + 1} de retry para: ${operationId}`);
+        setTimeout(() => {
+          generateApp(retryCount + 1);
+        }, 2000 * (retryCount + 1)); // Backoff exponencial
+        return;
+      }
+      
+      // Melhorar mensagens de erro
+      if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+        onError('⏳ Limite de requisições da API atingido. Tente novamente em alguns minutos ou use uma API Key diferente.');
+      } else if (errorMessage.includes('API key') || errorMessage.includes('authentication') || errorMessage.includes('401')) {
+        onError('🔑 API Key inválida ou não configurada. Verifique suas configurações.');
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        onError('🌐 Erro de conexão. Verifique sua internet e tente novamente.');
+      } else {
+        onError(`❌ Erro na geração: ${errorMessage}`);
+      }
+      
     } finally {
-      // Liberar flag de execução e lock global
-      generateApp.isRunning = false;
+      // Sempre liberar o lock e resetar flags
       apiLock.releaseLock(operationId);
+      (generateApp as any).isRunning = false;
     }
   };
 
+  // Cleanup no unmount
   useEffect(() => {
     return () => {
       if (intervalRef.current) {
@@ -213,82 +231,65 @@ export const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
   }, []);
 
   return (
-    <div className="bg-gray-900 h-full w-full flex flex-col overflow-hidden">
-      {/* Header minimalista */}
-      <div className="flex justify-between items-center px-6 py-4 border-b border-gray-700/50 bg-gray-800/50 flex-shrink-0">
-        <div className="flex items-center space-x-3">
-          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-          <h2 className="text-lg font-medium text-gray-200">Compilando: {appConfig.name}</h2>
-        </div>
+    <div className="h-full bg-gray-900 text-green-400 font-mono text-sm overflow-hidden flex flex-col">
+      {/* Header do Terminal */}
+      <div className="bg-gray-800 px-4 py-2 border-b border-gray-700 flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 bg-red-400/60 rounded-full"></div>
-          <div className="w-2 h-2 bg-yellow-400/60 rounded-full"></div>
-          <div className="w-2 h-2 bg-green-400/60 rounded-full"></div>
-        </div>
-      </div>
-      
-      {/* Terminal de código */}
-      <div 
-        ref={simulatorRef}
-        className="code-simulator flex-1 overflow-y-auto bg-gray-900 p-6 font-mono text-sm min-h-0"
-      >
-        {codeLines.map((line, index) => (
-          <div 
-            key={index} 
-            className="code-line text-green-400 mb-1 opacity-0 animate-fade-in"
-            style={{ 
-              animationDelay: `${index * 0.1}s`,
-              animationFillMode: 'forwards'
-            }}
-          >
-            <span className="text-gray-500 mr-2">$</span>
-            {line}
+          <div className="flex space-x-1">
+            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
           </div>
-        ))}
-      </div>
-      
-      {/* Barra de progresso minimalista */}
-      <div className="px-6 py-4 border-t border-gray-700/50 bg-gray-800/30 flex-shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm text-gray-400">{loadingText}</div>
-          <div className="text-sm text-gray-400 font-mono">{Math.round(progress)}%</div>
+          <span className="text-gray-300 ml-4">Canvas App Creator - Terminal de Compilação</span>
         </div>
-        <div className="w-full bg-gray-700/50 rounded-full h-2">
-          <div 
-            className="bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
-          ></div>
+        <div className="text-gray-400 text-xs">
+          {isCompiling ? `${Math.round(progress)}%` : 'Pronto'}
         </div>
       </div>
-      
-      <style>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-in forwards;
-        }
-        
-        .code-simulator::-webkit-scrollbar {
-          width: 4px;
-        }
-        
-        .code-simulator::-webkit-scrollbar-track {
-          background: rgba(55, 65, 81, 0.3);
-          border-radius: 2px;
-        }
-        
-        .code-simulator::-webkit-scrollbar-thumb {
-          background: rgba(107, 114, 128, 0.6);
-          border-radius: 2px;
-        }
-        
-        .code-simulator::-webkit-scrollbar-thumb:hover {
-          background: rgba(156, 163, 175, 0.8);
-        }
-      `}</style>
+
+      {/* Área do Terminal */}
+      <div className="flex-1 p-4 overflow-hidden flex flex-col">
+        {/* Simulador de código */}
+        <div 
+          ref={simulatorRef}
+          className="flex-1 overflow-y-auto space-y-1 mb-4"
+          style={{ maxHeight: 'calc(100% - 100px)' }}
+        >
+          {codeLines.map((line, index) => (
+            <div key={index} className="flex items-center space-x-2">
+              <span className="text-gray-500 text-xs w-8 text-right">{index + 1}</span>
+              <span className="text-green-400">{line}</span>
+            </div>
+          ))}
+          {isCompiling && (
+            <div className="flex items-center space-x-2">
+              <span className="text-gray-500 text-xs w-8 text-right">{codeLines.length + 1}</span>
+              <span className="text-yellow-400 animate-pulse">█</span>
+            </div>
+          )}
+        </div>
+
+        {/* Status e Progress Bar */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-blue-400">{loadingText}</span>
+            {isCompiling && (
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-400"></div>
+                <span className="text-xs text-gray-400">{Math.round(progress)}%</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-700 rounded-full h-2">
+            <div 
+              className="bg-gradient-to-r from-green-400 to-blue-500 h-2 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

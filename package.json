@@ -4,9 +4,8 @@
   "description": "Canvas App Creator - Full Stack Application",
   "private": true,
   "scripts": {
-    "dev:full": "npm run kill-ports && npm run install-deps && concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
-    "kill-ports": "kill-ports.bat",
-    "install-deps": "cd frontend && pnpm install && cd ../backend && pnpm install && cd ..",
+    "dev:full": "npm run install-deps && concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "install-deps": "pnpm install && cd frontend && pnpm install && cd ../backend && pnpm install && cd ..",
     "dev:frontend": "cd frontend && pnpm run dev",
     "dev:backend": "cd backend && pnpm run dev",
     "build": "cd frontend && pnpm run build && cd ../backend && pnpm run build",

@@ -146,7 +146,7 @@ const CompilationPage: React.FC = () => {
       <div className="flex-1 min-h-0">
         <CompilationTerminal
           appConfig={appConfig}
-          onCompilationComplete={handleCompilationComplete}
+          onComplete={handleCompilationComplete}
           onError={handleCompilationError}
           logs={compilationLogs}
         />

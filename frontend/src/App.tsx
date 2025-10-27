@@ -18,6 +18,7 @@ const App: React.FC = () => {
           {toasts.map((toast) => (
             <Toast
               key={toast.id}
+              id={toast.id}
               type={toast.type}
               title={toast.title}
               message={toast.message}

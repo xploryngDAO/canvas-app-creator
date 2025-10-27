@@ -15,6 +15,7 @@ import { AppConfig } from '@/types/app';
 import { database } from '@/services/database';
 import { geminiService } from '@/services/gemini';
 import { settingsService } from '@/services/settingsService';
+import { LayoutValidator, LayoutValidationResult } from '@/utils/layoutValidator';
 
 // Mapeamento de opções de layout por plataforma
 const LAYOUT_OPTIONS_BY_PLATFORM = {
@@ -808,7 +809,7 @@ const CreateAppPage: React.FC = () => {
     authType: 'simple',
     customLayoutElements: [], // Para elementos do layout personalizado
     useDefaultSettings: null, // Nova propriedade para configurações padrão vs personalizar
-    integrations: {} // Para armazenar integrações selecionadas e suas API keys
+    integrations: {} as Record<string, any> // Para armazenar integrações selecionadas e suas API keys
   });
 
   // Nova variável de estado para preview das configurações padrão
@@ -866,7 +867,7 @@ const CreateAppPage: React.FC = () => {
       },
       design_system: {
         frontend_stack: ensureString(frontendStack, "react"),
-        css_framework: ensureString(cssFramework, "tailwind"),
+        cssFramework: ensureString(cssFramework, "tailwind"),
         color_theme: ensureString(colorTheme, "blue-professional"),
         main_font: ensureString(mainFont, "inter"),
         layout_style: ensureString(layoutStyle, "header-footer")
@@ -1417,6 +1418,24 @@ const CreateAppPage: React.FC = () => {
     setCompilationCompleted(true);
     setIsCreating(false);
     
+    // Validar layout responsivo no código gerado
+    const validationResult = LayoutValidator.validateFixedLayout(code);
+    
+    if (!validationResult.isValid) {
+      console.warn('⚠️ Layout validation warnings:', validationResult);
+      
+      // Mostrar avisos de validação se houver erros críticos
+      if (validationResult.errors.length > 0) {
+        const errorMessage = `Layout pode não estar totalmente responsivo:\n${validationResult.errors.slice(0, 3).join('\n')}`;
+        error('Validação de Layout', errorMessage);
+      }
+      
+      // Log do relatório completo para debug
+      console.log('📋 Relatório de Validação de Layout:\n', LayoutValidator.generateValidationReport(validationResult));
+    } else {
+      console.log('✅ Layout validation passed successfully');
+    }
+    
     // Não criar projeto aqui - ele já foi criado no handleSubmit
     // Apenas criar a versão 1 com o código gerado
     success('App gerado!', `O app "${formData.name}" foi gerado com sucesso!`);
@@ -1765,7 +1784,7 @@ const CreateAppPage: React.FC = () => {
               {COLOR_THEMES_EXPANDED.map((theme) => (
                 <div
                   key={theme.value}
-                  onClick={() => handleInputChange({ target: { name: 'colorTheme', value: theme.value } })}
+                  onClick={() => handleInputChange({ target: { name: 'colorTheme', value: theme.value } } as React.ChangeEvent<HTMLInputElement>)}
                   className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:scale-105 ${
                     formData.colorTheme === theme.value
                       ? 'border-blue-500 bg-blue-500/10'
@@ -2870,31 +2889,53 @@ const CreateAppPage: React.FC = () => {
               >
                 <CompilationTerminal
                   appConfig={{
+                    // Informações básicas
                     name: formData.name,
                     description: formData.description,
                     appType: formData.appType,
+                    
+                    // Stack tecnológico
                     frontendStack: formData.frontendStack,
                     cssFramework: formData.cssFramework,
+                    
+                    // Design e aparência
                     colorTheme: formData.colorTheme,
                     mainFont: formData.mainFont,
                     layoutStyle: formData.layoutStyle,
+                    
+                    // Estrutura e navegação
+                    menuStructure: formData.menuStructure,
+                    customLayoutElements: formData.customLayoutElements || [],
+                    
+                    // Funcionalidades
                     enableAuth: formData.enableAuth,
                     enableDatabase: formData.enableDatabase,
                     enablePayments: formData.enablePayments,
-                    authProvider: formData.authProvider,
-                    databaseType: formData.databaseType,
-                    paymentProvider: formData.paymentProvider,
+                    
+                    // Provedores de serviços
+                    authProvider: formData.authProvider || '',
+                    databaseType: formData.databaseType || '',
+                    paymentProvider: formData.paymentProvider || '',
+                    
+                    // Configurações de plataforma
                     platformType: formData.platformType,
-                    menuStructure: formData.menuStructure,
-                    adminUsername: formData.adminUsername,
-                    adminPassword: formData.adminPassword,
+                    
+                    // Autenticação específica
                     authType: formData.authType,
-                    customLayoutElements: formData.customLayoutElements,
-                    // Adicionar campos necessários para o GeminiService
-                    features: [],
-                    integrations: formData.integrations && Object.keys(formData.integrations).length > 0 
-                      ? Object.keys(formData.integrations).filter(key => formData.integrations[key]?.enabled)
-                      : []
+                    adminUsername: formData.adminUsername || '',
+                    adminPassword: formData.adminPassword || '',
+                    
+                    // Integrações
+                    integrations: formData.integrations || {},
+                    
+                    // Arrays de funcionalidades (processados corretamente)
+                    features: [
+                      ...(formData.enableAuth ? ['authentication'] : []),
+                      ...(formData.enableDatabase ? ['database'] : []),
+                      ...(formData.enablePayments ? ['payments'] : []),
+                      // Adicionar outras features baseadas nas configurações
+                      ...(formData.customLayoutElements && formData.customLayoutElements.length > 0 ? ['custom-layout'] : [])
+                    ]
                   }}
                   onComplete={handleCompilationComplete}
                   onError={handleCompilationError}
