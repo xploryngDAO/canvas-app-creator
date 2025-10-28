@@ -11,15 +11,15 @@ export interface CodeGenerationRequest {
   enableAuth: boolean;
   enableDatabase: boolean;
   enablePayments: boolean;
-  customPrompt?: string;
+  customPrompt?: string | undefined;
 }
 
 export interface CodeGenerationResponse {
   success: boolean;
   message: string;
-  generatedCode?: string;
-  files?: GeneratedFile[];
-  logs?: string[];
+  generatedCode?: string | undefined;
+  files?: GeneratedFile[] | undefined;
+  logs?: string[] | undefined;
 }
 
 export interface GeneratedFile {
@@ -580,7 +580,7 @@ IMPORTANTE: Retorne APENAS o código HTML completo, sem explicações ou markdow
     // Substituir URLs completas do Unsplash
     Object.keys(unsplashReplacements).forEach(originalUrl => {
       const regex = new RegExp(originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^"\'\\s]*', 'g');
-      fixedCode = fixedCode.replace(regex, unsplashReplacements[originalUrl]);
+      fixedCode = fixedCode.replace(regex, unsplashReplacements[originalUrl] as string);
     });
 
     // Substituir qualquer URL do Unsplash restante (incluindo variações com parâmetros)

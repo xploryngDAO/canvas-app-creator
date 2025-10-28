@@ -16,16 +16,16 @@ export interface CreateProjectRequest {
 
 export interface CompileProjectRequest {
   projectId: string;
-  description?: string;
+  description?: string | undefined;
 }
 
 export interface CompileProjectResponse {
   success: boolean;
   message: string;
-  outputPath?: string;
-  logs?: string[];
-  generatedCode?: string;
-  files?: GeneratedFile[];
+  outputPath?: string | undefined;
+  logs?: string[] | undefined;
+  generatedCode?: string | undefined;
+  files?: GeneratedFile[] | undefined;
 }
 
 export class ProjectService {
@@ -97,7 +97,7 @@ export class ProjectService {
         enableAuth: project.enable_auth,
         enableDatabase: project.enable_database,
         enablePayments: project.enable_payments,
-        customPrompt: request.description
+        customPrompt: request.description || undefined
       };
 
       // Generate real code using Gemini AI
@@ -108,7 +108,7 @@ export class ProjectService {
         return {
           success: false,
           message: codeGenResult.message,
-          logs: codeGenResult.logs
+          logs: codeGenResult.logs || undefined
         };
       }
 
@@ -122,9 +122,9 @@ export class ProjectService {
         success: true,
         message: 'Projeto compilado com sucesso!',
         outputPath: `/generated/${project.id}`,
-        logs: codeGenResult.logs,
-        generatedCode: codeGenResult.generatedCode,
-        files: codeGenResult.files
+        logs: codeGenResult.logs || undefined,
+        generatedCode: codeGenResult.generatedCode || undefined,
+        files: codeGenResult.files || undefined
       };
     } catch (error) {
       // Update project status to error

@@ -83,7 +83,10 @@ const IDEPage: React.FC<IDEPageProps> = () => {
   }, []);
   const navigate = useNavigate();
   const location = useLocation();
-  const { projectId, versionId } = useParams<{ projectId?: string; versionId?: string }>();
+  const { projectId: urlProjectId, versionId } = useParams<{ projectId?: string; versionId?: string }>();
+  
+  // Estado para gerenciar o projectId atual (pode ser diferente do URL se for temporário)
+  const [projectId, setProjectId] = useState<string | null>(urlProjectId || null);
   
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
   const [generatedCode, setGeneratedCode] = useState('');
@@ -179,25 +182,25 @@ const IDEPage: React.FC<IDEPageProps> = () => {
 
   useEffect(() => {
     const loadProjectData = async () => {
-      console.log('🔍 [IDE_PAGE] Parâmetros da URL:', { projectId, versionId });
+      console.log('🔍 [IDE_PAGE] Parâmetros da URL:', { urlProjectId, versionId });
       console.log('🔍 [IDE_PAGE] Location state:', location.state);
       
       // Se há projectId e versionId nos parâmetros da URL, carregar versão específica
-      if (projectId && versionId) {
+      if (urlProjectId && versionId) {
         try {
-          console.log('🔍 [IDE_PAGE] Carregando projeto:', projectId);
-          const project = await database.getProject(projectId);
+          console.log('🔍 [IDE_PAGE] Carregando projeto:', urlProjectId);
+          const project = await database.getProject(urlProjectId);
           
           if (!project) {
-            console.error('❌ [IDE_PAGE] Projeto não encontrado:', projectId);
+            console.error('❌ [IDE_PAGE] Projeto não encontrado:', urlProjectId);
             navigate('/projects');
             return;
           }
           
           console.log('✅ [IDE_PAGE] Projeto carregado:', project);
 
-          console.log('🔍 [IDE_PAGE] Carregando versões do projeto:', projectId);
-          const versions = await database.getVersions(projectId);
+          console.log('🔍 [IDE_PAGE] Carregando versões do projeto:', urlProjectId);
+          const versions = await database.getVersions(urlProjectId);
           console.log('🔍 [IDE_PAGE] Versões encontradas:', versions);
           
           const version = versions.find(v => v.version_number === parseInt(versionId));
@@ -248,7 +251,7 @@ const IDEPage: React.FC<IDEPageProps> = () => {
     };
 
     loadProjectData();
-  }, [location.state, navigate, projectId, versionId]);
+  }, [location.state, navigate, urlProjectId, versionId]);
 
   // Redimensionamento horizontal
   const handleMouseDownHorizontal = (e: React.MouseEvent) => {
@@ -857,6 +860,9 @@ Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
                       : `temp_project_${Date.now()}`;
                     
                     console.log('🆔 [IDE_PAGE] Criando ID temporário para projeto:', currentProjectId);
+                    
+                    // Atualizar o projectId no estado para futuras operações
+                    setProjectId(currentProjectId);
                   }
                   
                   console.log('💾 [IDE_PAGE] Salvando versão automaticamente...', {
@@ -864,7 +870,7 @@ Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
                     userPrompt: userPrompt.substring(0, 50) + '...',
                     codeLength: newCode.length,
                     hasAppConfig: !!appConfig,
-                    isTemporaryProject: !projectId
+                    isTemporaryProject: currentProjectId.startsWith('temp_')
                   });
                   
                   const versionId = await versioningService.saveVersionAutomatically(
@@ -876,27 +882,54 @@ Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
                   console.log('✅ [IDE_PAGE] Versão salva automaticamente:', {
                     versionId,
                     projectId: currentProjectId,
-                    isTemporaryProject: !projectId
+                    isTemporaryProject: currentProjectId.startsWith('temp_'),
+                    versionSaved: true
                   });
+
+                  // Mostrar feedback visual de sucesso ao usuário
+                  // TODO: Implementar toast/notificação de sucesso
                   
                 } catch (error) {
                   console.error('❌ [IDE_PAGE] Erro ao salvar versão automaticamente:', error);
                   
+                  // Mostrar feedback de erro ao usuário
+                  console.error('❌ [IDE_PAGE] Detalhes do erro:', {
+                    errorMessage: error.message,
+                    errorStack: error.stack,
+                    projectId: projectId,
+                    hasUserPrompt: !!userPrompt,
+                    hasNewCode: !!newCode,
+                    codeLength: newCode?.length || 0
+                  });
+
+                  // TODO: Implementar toast/notificação de erro
                   // Não bloquear a atualização do código em caso de erro no versionamento
                 }
               } else {
                 console.log('⚠️ [IDE_PAGE] Versionamento não executado - sem userPrompt:', {
                   hasProjectId: !!projectId,
                   hasUserPrompt: !!userPrompt,
-                  hasAppConfig: !!appConfig
+                  hasAppConfig: !!appConfig,
+                  hasNewCode: !!newCode,
+                  explanation: explanation?.substring(0, 50) + '...'
                 });
               }
               
               // Aqui podemos adicionar lógica para atualizar o preview em tempo real
             }}
             onError={(error) => {
-              console.error('Erro no AICopilot:', error);
-              // Aqui podemos mostrar uma notificação de erro para o usuário
+              console.error('❌ [IDE_PAGE] Erro no AICopilot:', error);
+              
+              // Log detalhado do erro
+              console.error('❌ [IDE_PAGE] Detalhes do erro do AICopilot:', {
+                errorMessage: error,
+                timestamp: new Date().toISOString(),
+                projectId: projectId,
+                hasGeneratedCode: !!generatedCode,
+                hasAppConfig: !!appConfig
+              });
+
+              // TODO: Implementar toast/notificação de erro para o usuário
             }}
           />
         );
