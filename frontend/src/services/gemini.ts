@@ -13,6 +13,25 @@ export class GeminiService {
   private apiKey: string | null = null;
   private baseUrl = '';
   private model = 'gemini-2.5-flash'; // Default model, will be overridden by settings
+  
+  // Configurações de retry
+  private readonly MAX_RETRIES = 5; // Aumentado de 3 para 5 para erros 503
+  private readonly INITIAL_RETRY_DELAY = 2000; // Aumentado de 1000 para 2000ms
+  private readonly MAX_RETRY_DELAY = 30000; // Aumentado de 10000 para 30000ms (30 segundos)
+  private readonly TIMEOUT_MS = 45000; // Aumentado de 30000 para 45000ms (45 segundos)
+  
+  // Status da API
+  private isApiAvailable: boolean = true;
+  private lastApiCheck: number = 0;
+  private readonly API_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutos
+  
+  // Queue de mensagens offline
+  private offlineQueue: Array<{
+    id: string;
+    prompt: string;
+    timestamp: number;
+    retryCount: number;
+  }> = [];
 
   /**
    * Gera a URL da API baseada no modelo atual
@@ -168,7 +187,7 @@ export class GeminiService {
           console.log('📱 [DEBUG] Abordagem responsiva determinada:', approach);
 
           // Construir prompts
-          const systemPrompt = this.buildAdaptiveSystemPrompt(approach);
+          const systemPrompt = this.buildAdaptiveSystemPrompt(approach, config);
           const customPrompt = this.buildPrompt(config);
           const fullPrompt = `${systemPrompt}\n\n${customPrompt}`;
 
@@ -227,18 +246,30 @@ export class GeminiService {
               errorText
             });
 
-            // Tratar rate limit especificamente
+            // Tratar diferentes tipos de erro
             if (response.status === 429) {
               lastError = 'Rate limit excedido';
               console.log(`⏳ [DEBUG] Rate limit na tentativa ${attempt}, aguardando...`);
               
-              // Tentar com modelo alternativo se disponível
               if (attempt < maxRetries) {
-                console.log('🔄 [DEBUG] Tentando com modelo alternativo...');
-                // Aqui poderia alternar para gemini-pro se necessário
-                await this.sleep(2000 * attempt);
+                console.log('🔄 [DEBUG] Aguardando antes de tentar novamente...');
+                await this.sleep(5000 * attempt); // Aumentar delay para rate limit
                 continue;
               }
+            } else if (response.status === 503) {
+              lastError = 'Modelo sobrecarregado';
+              console.log(`🔄 [DEBUG] Modelo sobrecarregado na tentativa ${attempt}, aguardando...`);
+              
+              if (attempt < maxRetries) {
+                console.log('⏳ [DEBUG] Aguardando modelo ficar disponível...');
+                await this.sleep(3000 * attempt); // Delay específico para 503
+                continue;
+              }
+            } else if (response.status === 400) {
+              // Erro 400 geralmente indica problema com API key ou formato da requisição
+              lastError = 'API Key inválida ou malformada';
+              console.error('❌ [ERROR] Erro 400 - possível problema com API Key');
+              break; // Não tentar novamente para erro 400
             }
 
             lastError = `Erro na API: ${response.status} - ${response.statusText}`;
@@ -361,6 +392,12 @@ export class GeminiService {
   }
 
   private buildPrompt(config: AppConfig): string {
+    // Verificar se é modo IA Criativa
+    if (config.useAICreative === true || config.appType === 'ai-creative') {
+      console.log('🎨 [DEBUG] Modo IA Criativa detectado - construindo prompt criativo...');
+      return this.buildCreativePrompt(config);
+    }
+    
     // Construir prompt detalhado usando TODAS as configurações do Wizard
     let prompt = `Crie uma aplicação ${config.appType} chamada "${config.name}": ${config.description}.\n\n`;
     
@@ -457,6 +494,152 @@ export class GeminiService {
     return prompt;
   }
 
+  private buildCreativePrompt(config: AppConfig): string {
+    console.log('🎨 [DEBUG] Construindo prompt criativo de alta qualidade profissional...');
+    
+    let prompt = `Crie um app web "${config.name}": ${config.description}
+
+📋 ESTRUTURA HTML OBRIGATÓRIA:
+- DOCTYPE html5 completo: <!DOCTYPE html>
+- Meta tags essenciais: charset UTF-8, viewport responsivo, description
+- TAILWIND CSS CDN obrigatório: <script src="https://cdn.tailwindcss.com"></script>
+- Google Fonts para tipografia: <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+- Estrutura HTML5 semântica: <html>, <head>, <body> completos
+- Título da página apropriado no <title>
+
+🚨 IMAGENS - REGRA CRÍTICA:
+- NUNCA use URLs do Unsplash (source.unsplash.com ou images.unsplash.com)
+- SEMPRE use placeholders SVG inline codificados em base64
+- Para imagens de produtos: use SVG com ícone de produto
+- Para avatares: use SVG com ícone de usuário
+- Para backgrounds: use gradientes CSS ou SVG patterns
+- Exemplo: <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2U1ZTdlYiIvPgo8dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmaWxsPSIjNmI3MjgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+SW1hZ2VtPC90ZXh0Pgo8L3N2Zz4K" alt="Placeholder">
+
+🎯 DIRETRIZES DE DESIGN PROFISSIONAL:
+- Use TAILWIND CSS como framework principal para consistência
+- Implemente design system moderno com paleta de cores profissional
+- Siga padrões de aplicações como Notion, Linear, Vercel, Figma
+- Garanta qualidade visual comparável a Tailwind UI e Shadcn/ui
+
+🎨 SISTEMA DE CORES E TIPOGRAFIA:
+- Paleta principal: slate/gray para neutros, blue/indigo para primary, emerald/green para success, red para danger
+- Tipografia: Inter, Roboto ou Poppins como fonte principal
+- Hierarquia clara: text-4xl/3xl para títulos, text-lg/base para corpo, text-sm para labels
+- Espaçamentos consistentes: 4, 8, 12, 16, 24, 32, 48, 64px (p-1, p-2, p-3, p-4, p-6, p-8, p-12, p-16)
+
+🏗️ ESTRUTURA DE LAYOUT PROFISSIONAL:
+- Header fixo (sticky top-0) com navegação clara e logo
+- Sidebar responsiva com menu hambúrguer no mobile (hidden md:block)
+- Grid layouts bem estruturados (grid-cols-1 md:grid-cols-2 lg:grid-cols-3)
+- Container centralizado (max-w-7xl mx-auto px-4 sm:px-6 lg:px-8)
+- Breakpoints responsivos: sm:640px, md:768px, lg:1024px, xl:1280px
+
+🧩 COMPONENTES MODERNOS OBRIGATÓRIOS:
+- Cards: bg-white rounded-xl shadow-sm border border-gray-200 p-6
+- Botões: Primary (bg-blue-600 hover:bg-blue-700), Secondary (bg-gray-100 hover:bg-gray-200)
+- Inputs: border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg
+- Modais: backdrop-blur-sm bg-black/50 com animações de entrada/saída
+- Navegação: indicadores visuais ativos, hover states, breadcrumbs se necessário
+
+✨ RECURSOS VISUAIS DE QUALIDADE:
+- Ícones: Use Heroicons ou Lucide (SVG inline) para consistência
+- Gradientes sutis: from-blue-50 to-indigo-100 para backgrounds
+- Sombras profissionais: shadow-sm, shadow-md, shadow-lg conforme contexto
+- Bordas arredondadas: rounded-lg para cards, rounded-full para avatars
+- Estados hover/focus bem definidos com transições suaves
+
+🎭 MICRO-INTERAÇÕES E ANIMAÇÕES:
+- Transições: transition-all duration-200 ease-in-out
+- Hover effects: transform hover:scale-105, hover:shadow-lg
+- Loading states: spinners elegantes ou skeleton loaders
+- Feedback visual: toast notifications, success/error states
+- Animações de entrada: fade-in, slide-in conforme apropriado
+
+📱 MOBILE FIRST OBRIGATÓRIO - PADRÕES EXEMPLARES:
+- SEMPRE design mobile-first com breakpoints progressivos: sm:640px, md:768px, lg:1024px, xl:1280px
+- Header mobile específico: "md:hidden" com menu hambúrguer funcional
+- Sidebar responsiva: "fixed inset-y-0 left-0 w-64 transform -translate-x-full md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-50"
+- Touch targets obrigatórios: min-h-[44px] min-w-[44px] para botões e inputs (classe .btn-touch)
+- Grid responsivo progressivo: "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+- Navegação mobile: botão hambúrguer com overlay e transições suaves
+- Sticky positioning: "sticky top-0 z-40" para headers mobile
+- Overflow handling: "overflow-hidden" no container principal, "overflow-y-auto" no conteúdo
+- Flexbox adaptativo: "flex flex-col min-h-screen" para layout principal
+- Espaçamentos responsivos: "p-4 md:p-8", "mb-4 sm:mb-0"
+
+🔧 FUNCIONALIDADES AVANÇADAS:
+- Validação de formulários com feedback visual em tempo real
+- Estados de loading com spinners ou progress bars
+- Drag & drop se relevante (com feedback visual)
+- Busca/filtros funcionais se aplicável
+- Persistência com localStorage quando necessário
+- Tratamento de estados vazios com ilustrações ou mensagens
+
+🎯 PADRÕES DE UX INTUITIVA OBRIGATÓRIOS:
+- Navegação com indicadores visuais ativos: "active-nav bg-orange-600 text-white" para item selecionado
+- Estados hover bem definidos: "hover:bg-orange-600 hover:text-white transition-colors duration-200"
+- Hierarquia visual clara: títulos h1/h2/h3 com cores distintivas (text-orange-500, text-orange-400)
+- Call-to-actions destacados: botões primários com cores vibrantes e hover effects
+- Feedback imediato: loading states, success/error messages, toast notifications
+- Fluxos claros: breadcrumbs, progress indicators, step-by-step wizards quando aplicável
+- Acessibilidade obrigatória: aria-label em todos os botões, semantic HTML5, contraste WCAG AA
+- Estados de foco visíveis: focus:outline-none focus:ring-2 focus:ring-orange-500
+- Micro-interações: transform hover:scale-105, transition-all duration-200 ease-in-out
+- Consistência visual: paleta de cores unificada, tipografia harmoniosa, espaçamentos regulares
+
+🤖 INTEGRAÇÃO DE IA RESPONSIVA (QUANDO SOLICITADO):
+- Interface de chat responsiva: textarea auto-expansível com "resize-none" e "rows=1"
+- Layout de conversa: avatares, mensagens alinhadas, timestamps
+- Estados de loading: spinners durante processamento de IA
+- Feedback visual: indicadores de digitação, status de conexão
+- Persistência: localStorage para histórico de conversas
+- Acessibilidade: aria-label descritivos, navegação por teclado
+- Design adaptativo: interface compacta no mobile, expandida no desktop
+- Integração suave: seção dedicada sem interferir no fluxo principal
+
+💡 INSPIRAÇÃO E INOVAÇÃO RESPONSIVA:
+- Analise o contexto e implemente funcionalidades inteligentes adaptáveis
+- Padrões modernos responsivos: sticky headers mobile, floating action buttons touch-friendly
+- Dark mode consistente: bg-gray-900, bg-gray-800, text-gray-100 em toda aplicação
+- Layouts inovadores mas funcionais: cards adaptativos, grids flexíveis
+- Recursos úteis responsivos: busca mobile-friendly, filtros em drawer/modal
+- Performance mobile: lazy loading, debounce em buscas, otimização de imagens
+
+🚀 QUALIDADE TÉCNICA:
+- Código HTML5 semântico e bem estruturado
+- CSS otimizado com Tailwind classes utilitárias
+- JavaScript vanilla moderno (ES6+) para interatividade
+- Performance otimizada: lazy loading, debounce em buscas
+- Compatibilidade cross-browser
+- Meta tags apropriadas para SEO e responsividade
+
+🔧 VALIDAÇÃO DE QUALIDADE OBRIGATÓRIA:
+- Verificar se o Tailwind CSS CDN está incluído no <head>
+- Garantir que todos os componentes tenham classes Tailwind aplicadas
+- Testar responsividade em breakpoints: sm, md, lg, xl
+- Validar que o HTML é completo e funcional
+- Confirmar que JavaScript está funcionando corretamente
+- Assegurar que fontes estão carregando adequadamente
+
+📤 FORMATO DE SAÍDA ESPECÍFICO:
+- Retornar HTML completo iniciando com <!DOCTYPE html>
+- Incluir OBRIGATORIAMENTE o Tailwind CSS CDN no <head>
+- Estrutura completa: <html lang="pt-BR"><head>...</head><body>...</body></html>
+- Todos os estilos devem usar classes Tailwind (não CSS inline)
+- JavaScript deve estar no final do <body> ou em <script> tags
+- Não incluir explicações, comentários ou markdown - APENAS HTML puro
+
+IMPORTANTE: O resultado DEVE ser um arquivo HTML completo e funcional que pode ser aberto diretamente no navegador com todos os estilos Tailwind aplicados corretamente. Qualidade profissional é obrigatória!`;
+
+    console.log('🎨 [DEBUG] Prompt criativo aprimorado construído:', {
+      length: prompt.length,
+      projectName: config.name,
+      description: config.description?.substring(0, 100) + '...'
+    });
+    
+    return prompt;
+  }
+
   private extractCode(text: string): string {
     // Tentar extrair código entre ```html e ```
     const htmlMatch = text.match(/```html\n([\s\S]*?)\n```/);
@@ -487,11 +670,16 @@ export class GeminiService {
 
   async testConnection(): Promise<{ success: boolean; error?: string; quotaInfo?: any }> {
     if (!this.apiKey) {
+      console.warn('⚠️ [API_STATUS] API Key não configurada');
       return { success: false, error: 'API Key não configurada' };
     }
 
     try {
-      console.log('🔍 [DEBUG] Testando conexão com API Key:', this.apiKey.substring(0, 10) + '...');
+      console.log('🔍 [API_STATUS] Testando conexão com API Gemini...', {
+        apiKeyPreview: this.apiKey.substring(0, 10) + '...',
+        model: this.model,
+        timestamp: new Date().toISOString()
+      });
 
       const testPrompt = 'Responda apenas "OK" se você conseguir me ouvir.';
       const requestBody = {
@@ -506,7 +694,17 @@ export class GeminiService {
         }
       };
 
-      const response = await fetch(this.baseUrl + `?key=${this.apiKey}`, {
+      // Usar getApiUrl() para garantir que temos a URL correta
+      const apiUrl = this.getApiUrl();
+      const fullUrl = `${apiUrl}?key=${this.apiKey}`;
+
+      console.log('🌐 [API_STATUS] Enviando requisição de teste:', {
+        apiUrl: apiUrl,
+        model: this.model,
+        baseUrl: this.baseUrl
+      });
+
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -514,38 +712,99 @@ export class GeminiService {
         body: JSON.stringify(requestBody)
       });
 
-      console.log('📡 [DEBUG] Resposta do teste de conexão:', {
+      console.log('📡 [API_STATUS] Resposta recebida:', {
         status: response.status,
         statusText: response.statusText,
-        ok: response.ok
+        ok: response.ok,
+        timestamp: new Date().toISOString()
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ [ERROR] Teste de conexão falhou:', errorText);
+        console.error('❌ [API_STATUS] Teste de conexão falhou:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText.substring(0, 200) + '...'
+        });
+        
+        // Atualizar status da API baseado no resultado
+        this.isApiAvailable = false;
+        this.lastApiCheck = Date.now();
         
         if (response.status === 400) {
-          return { success: false, error: 'API Key inválida ou malformada' };
+          console.error('❌ [API_STATUS] API Key inválida (400)');
+          return { success: false, error: 'API Key inválida ou malformada. Verifique se a chave está correta.' };
         } else if (response.status === 403) {
+          console.error('❌ [API_STATUS] API Key sem permissões (403)');
           return { success: false, error: 'API Key sem permissões ou projeto inválido' };
         } else if (response.status === 429) {
-          return { success: false, error: 'Quota excedida ou rate limit atingido' };
+          console.warn('⚠️ [API_STATUS] Quota excedida (429)');
+          return { success: false, error: 'Quota excedida ou rate limit atingido. Aguarde alguns minutos.' };
+        } else if (response.status === 503) {
+          console.warn('⚠️ [API_STATUS] Modelo sobrecarregado (503)');
+          return { success: false, error: 'Modelo temporariamente sobrecarregado. Tente novamente em alguns minutos.' };
         }
         
         return { success: false, error: `Erro ${response.status}: ${response.statusText}` };
       }
 
       const data = await response.json();
-      console.log('✅ [DEBUG] Teste de conexão bem-sucedido:', data);
+      console.log('✅ [API_STATUS] Teste de conexão bem-sucedido!', {
+        hasResponse: !!data,
+        candidatesCount: data.candidates?.length || 0,
+        timestamp: new Date().toISOString()
+      });
+
+      // Atualizar status da API como disponível
+      this.isApiAvailable = true;
+      this.lastApiCheck = Date.now();
+
+      console.log('🟢 [API_STATUS] API Gemini está ONLINE e funcionando');
 
       return { success: true, quotaInfo: data };
     } catch (error) {
-      console.error('❌ [ERROR] Erro no teste de conexão:', error);
+      console.error('❌ [API_STATUS] Erro no teste de conexão:', {
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+        timestamp: new Date().toISOString()
+      });
+      
+      // Atualizar status da API como indisponível
+      this.isApiAvailable = false;
+      this.lastApiCheck = Date.now();
+      
+      console.log('🔴 [API_STATUS] API Gemini está OFFLINE');
+      
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Erro desconhecido na conexão' 
       };
     }
+  }
+
+  // Método para forçar teste de conexão e atualizar status
+  async forceConnectionTest(): Promise<{ success: boolean; error?: string; quotaInfo?: any }> {
+    console.log('🔄 [FORCE_TEST] Forçando teste de conexão...');
+    
+    // Resetar cache de verificação para forçar novo teste
+    this.lastApiCheck = 0;
+    
+    const result = await this.testConnection();
+    
+    console.log('📊 [FORCE_TEST] Resultado do teste forçado:', {
+      success: result.success,
+      error: result.error,
+      apiAvailable: this.isApiAvailable
+    });
+    
+    return result;
+  }
+
+  // Método para obter status atual da API
+  getApiStatus(): { available: boolean; lastCheck: number } {
+    return {
+      available: this.isApiAvailable,
+      lastCheck: this.lastApiCheck
+    };
   }
 
   private generateCacheKey(config: AppConfig): string {
@@ -656,6 +915,117 @@ export class GeminiService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  /**
+   * Calcula o delay para retry com backoff exponencial
+   */
+  private calculateRetryDelay(attempt: number): number {
+    // Delay especial mais longo para erros 503 (serviço indisponível)
+    const baseDelay = this.INITIAL_RETRY_DELAY;
+    const exponentialDelay = Math.min(baseDelay * Math.pow(2, attempt), this.MAX_RETRY_DELAY);
+    
+    // Adicionar jitter para evitar thundering herd
+    const jitter = Math.random() * 1000;
+    
+    return exponentialDelay + jitter;
+  }
+
+  /**
+   * Verifica se o erro é recuperável (pode ser retentado)
+   */
+  private isRetryableError(status: number): boolean {
+    // Incluir mais códigos de erro recuperáveis e dar prioridade especial ao 503
+    return [429, 500, 502, 503, 504, 520, 521, 522, 523, 524].includes(status);
+  }
+
+  /**
+   * Cria um timeout para requisições
+   */
+  private createTimeoutPromise(timeoutMs: number): Promise<never> {
+    return new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Timeout: Requisição excedeu ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+  }
+
+  /**
+   * Executa uma requisição com retry automático
+   */
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string = 'operação'
+  ): Promise<T> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
+      try {
+        console.log(`🔄 [GEMINI_RETRY] Tentativa ${attempt + 1}/${this.MAX_RETRIES + 1} para ${operationName}`);
+        
+        // Executa a operação com timeout
+        const result = await Promise.race([
+          operation(),
+          this.createTimeoutPromise(this.TIMEOUT_MS)
+        ]);
+        
+        console.log(`✅ [GEMINI_RETRY] ${operationName} bem-sucedida na tentativa ${attempt + 1}`);
+        return result;
+        
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        console.warn(`⚠️ [GEMINI_RETRY] Tentativa ${attempt + 1} falhou para ${operationName}:`, {
+          error: lastError.message,
+          attempt: attempt + 1,
+          maxRetries: this.MAX_RETRIES + 1
+        });
+
+        // Se não é o último retry e o erro é recuperável
+        if (attempt < this.MAX_RETRIES) {
+          // Verifica se é um erro HTTP recuperável
+          const isHttpError = lastError.message.includes('Erro na API:');
+          const statusMatch = lastError.message.match(/Erro na API: (\d+)/);
+          const status = statusMatch ? parseInt(statusMatch[1]) : 0;
+          
+          // Lógica especial para erro 503 (serviço indisponível)
+          const is503Error = status === 503 || lastError.message.includes('503') || lastError.message.includes('indisponível');
+          
+          if (is503Error) {
+            // Para erro 503, sempre tentar novamente com delay maior
+            const delay = this.calculateRetryDelay(attempt) * 2; // Dobrar o delay para 503
+            console.log(`⏳ [GEMINI_RETRY] Erro 503 detectado - aguardando ${delay}ms antes da próxima tentativa...`);
+            await this.sleep(delay);
+            continue;
+          } else if (isHttpError && this.isRetryableError(status)) {
+            const delay = this.calculateRetryDelay(attempt);
+            console.log(`⏳ [GEMINI_RETRY] Aguardando ${delay}ms antes da próxima tentativa...`);
+            await this.sleep(delay);
+            continue;
+          } else if (!isHttpError && (
+            lastError.message.includes('Timeout') ||
+            lastError.message.includes('fetch') ||
+            lastError.message.includes('network') ||
+            lastError.message.includes('NetworkError') ||
+            lastError.message.includes('overloaded') ||
+            lastError.message.includes('UNAVAILABLE')
+          )) {
+            // Retry para erros de rede/timeout/overload
+            const delay = this.calculateRetryDelay(attempt);
+            console.log(`⏳ [GEMINI_RETRY] Aguardando ${delay}ms antes da próxima tentativa (erro de rede/overload)...`);
+            await this.sleep(delay);
+            continue;
+          }
+        }
+        
+        // Se chegou aqui, não deve fazer retry
+        break;
+      }
+    }
+
+    // Se chegou aqui, todas as tentativas falharam
+    console.error(`❌ [GEMINI_RETRY] Todas as tentativas falharam para ${operationName}:`, lastError);
+    throw lastError;
+  }
+
   private determineResponsiveApproach(config: AppConfig): 'mobile-first' | 'desktop-first' {
     // Analisar palavras-chave na descrição e tipo de app
     const description = config.description?.toLowerCase() || '';
@@ -709,9 +1079,33 @@ export class GeminiService {
   }
 
   /**
-   * Constrói um system prompt simplificado que colabora com o customPrompt
+   * Constrói um system prompt adaptativo que detecta o modo IA Criativa
    */
-  private buildAdaptiveSystemPrompt(approach: 'mobile-first' | 'desktop-first'): string {
+  private buildAdaptiveSystemPrompt(approach: 'mobile-first' | 'desktop-first', config?: AppConfig): string {
+    // Detectar se é modo IA Criativa
+    const isCreativeMode = config?.useAICreative === true || config?.appType === 'ai-creative';
+    
+    if (isCreativeMode) {
+      console.log('🎨 [DEBUG] Aplicando system prompt minimalista para IA Criativa...');
+      // System prompt minimalista para total liberdade criativa
+      return `Você é um desenvolvedor web criativo e inovador. Crie um aplicativo web COMPLETO e FUNCIONAL baseado na descrição fornecida.
+
+LIBERDADE TOTAL:
+- Escolha livremente a melhor tecnologia e abordagem
+- Crie designs únicos e inovadores
+- Implemente funcionalidades criativas
+- Use sua experiência para tomar as melhores decisões
+
+REQUISITOS BÁSICOS:
+- Retorne APENAS o código HTML completo, sem explicações
+- Garanta que o código seja funcional e responsivo
+- Siga as melhores práticas de desenvolvimento web
+- Foque na experiência do usuário e qualidade visual
+
+Seja criativo e inovador!`;
+    }
+
+    // System prompt padrão com diretrizes específicas
     return `Você é um desenvolvedor web especialista. Crie um aplicativo web completo seguindo EXATAMENTE as especificações do prompt personalizado.
 
 INSTRUÇÕES BÁSICAS:
@@ -771,38 +1165,146 @@ RESPONSIVIDADE ${approach.toUpperCase()}:
 PRIORIDADE ABSOLUTA: Siga EXATAMENTE todas as configurações do prompt personalizado - cores, fontes, layout, funcionalidades e integrações especificadas.`;
   }
 
-  async generateWithPrompt(prompt: string): Promise<{ success: boolean; content?: string; error?: string }> {
-    console.log('🔍 [GEMINI_DEBUG] Iniciando generateWithPrompt:', {
-      hasApiKey: !!this.apiKey,
-      apiKeyLength: this.apiKey?.length || 0,
-      apiKeyPreview: this.apiKey ? `${this.apiKey.substring(0, 10)}...` : 'null',
-      currentModel: this.model,
-      baseUrl: this.baseUrl
-    });
-
-    if (!this.apiKey) {
-      console.error('❌ [GEMINI_DEBUG] API Key não encontrada');
-      return {
-        success: false,
-        error: 'API Key não configurada. Configure sua API Key do Gemini nas configurações.'
-      };
+  // Verificar se a API está disponível
+  async checkApiStatus(): Promise<boolean> {
+    const now = Date.now();
+    
+    // Se já verificamos recentemente, usar cache
+    if (now - this.lastApiCheck < this.API_CHECK_INTERVAL) {
+      return this.isApiAvailable;
     }
-  
-    if (!this.isValidApiKeyFormat(this.apiKey)) {
-      console.error('❌ [GEMINI_DEBUG] Formato de API Key inválido:', {
-        keyLength: this.apiKey.length,
-        keyStart: this.apiKey.substring(0, 10)
-      });
-      return {
-        success: false,
-        error: 'Formato de API Key inválido. Verifique se a API Key está correta.'
-      };
-    }
-  
+    
     try {
-      console.log('🚀 [GEMINI_DEBUG] Enviando prompt para Gemini:', {
-        promptLength: prompt.length,
-        model: this.model,
+      const result = await this.testConnection();
+      this.isApiAvailable = result.success;
+      this.lastApiCheck = now;
+      
+      console.log('🔍 [API_STATUS] Status da API verificado:', {
+        available: this.isApiAvailable,
+        timestamp: new Date(now).toISOString()
+      });
+      
+      return this.isApiAvailable;
+    } catch (error) {
+      this.isApiAvailable = false;
+      this.lastApiCheck = now;
+      console.warn('⚠️ [API_STATUS] Falha na verificação da API:', error);
+      return false;
+    }
+  }
+
+  // Gerar resposta simulada para modo offline
+  private generateOfflineResponse(prompt: string): string {
+    const responses = [
+      "Desculpe, estou temporariamente offline. Esta é uma resposta simulada para demonstrar a funcionalidade.",
+      "A API Gemini está indisponível no momento. Aqui está uma resposta de exemplo para manter a funcionalidade.",
+      "Modo offline ativo. Esta é uma resposta simulada enquanto a API está indisponível.",
+      "Serviço temporariamente indisponível. Resposta de demonstração sendo exibida.",
+      "API offline - Esta é uma resposta de fallback para manter a experiência do usuário."
+    ];
+    
+    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+    
+    // Adicionar contexto baseado no prompt se possível
+    if (prompt.toLowerCase().includes('código') || prompt.toLowerCase().includes('code')) {
+      return `${randomResponse}\n\n// Exemplo de código (modo offline)\nfunction exemploOffline() {\n  console.log('API indisponível - modo demo ativo');\n  return 'Resposta simulada';\n}`;
+    }
+    
+    return randomResponse;
+  }
+
+  // Adicionar mensagem à queue offline
+  private addToOfflineQueue(prompt: string): string {
+    const messageId = `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    this.offlineQueue.push({
+      id: messageId,
+      prompt,
+      timestamp: Date.now(),
+      retryCount: 0
+    });
+    
+    console.log('📥 [OFFLINE_QUEUE] Mensagem adicionada à queue:', {
+      id: messageId,
+      queueSize: this.offlineQueue.length
+    });
+    
+    return messageId;
+  }
+
+  // Processar queue offline quando API voltar
+  async processOfflineQueue(): Promise<void> {
+    if (this.offlineQueue.length === 0 || !this.isApiAvailable) {
+      return;
+    }
+    
+    console.log('🔄 [OFFLINE_QUEUE] Processando queue offline:', {
+      queueSize: this.offlineQueue.length
+    });
+    
+    const queueCopy = [...this.offlineQueue];
+    this.offlineQueue = [];
+    
+    for (const message of queueCopy) {
+      try {
+        await this.generateWithPrompt(message.prompt);
+        console.log('✅ [OFFLINE_QUEUE] Mensagem processada:', message.id);
+      } catch (error) {
+        console.error('❌ [OFFLINE_QUEUE] Falha ao processar mensagem:', message.id, error);
+        
+        // Re-adicionar à queue se não excedeu tentativas
+        if (message.retryCount < 3) {
+          message.retryCount++;
+          this.offlineQueue.push(message);
+        }
+      }
+    }
+  }
+
+  // Obter status da queue offline
+  getOfflineQueueStatus(): { size: number; messages: Array<{ id: string; timestamp: number; retryCount: number }> } {
+    return {
+      size: this.offlineQueue.length,
+      messages: this.offlineQueue.map(msg => ({
+        id: msg.id,
+        timestamp: msg.timestamp,
+        retryCount: msg.retryCount
+      }))
+    };
+  }
+
+  async generateWithPrompt(prompt: string): Promise<{ success: boolean; content?: string; error?: string; isOffline?: boolean; queueId?: string }> {
+    // Verificar se a API está disponível
+    const apiAvailable = await this.checkApiStatus();
+    
+    if (!apiAvailable) {
+      console.log('🔌 [OFFLINE_MODE] API indisponível, ativando modo offline');
+      
+      const queueId = this.addToOfflineQueue(prompt);
+      const offlineContent = this.generateOfflineResponse(prompt);
+      
+      return {
+        success: true,
+        content: offlineContent,
+        isOffline: true,
+        queueId
+      };
+    }
+
+    return this.executeWithRetry(async () => {
+      if (!this.apiKey) {
+        throw new Error('API key não configurada');
+      }
+    
+      if (!this.isValidApiKeyFormat(this.apiKey)) {
+        throw new Error('Formato da API key inválido. A chave deve começar com "AIza" e ter pelo menos 35 caracteres.');
+      }
+    
+      console.log('🔑 [GEMINI_DEBUG] Verificação da API Key:', {
+        hasApiKey: !!this.apiKey,
+        keyLength: this.apiKey?.length,
+        keyPrefix: this.apiKey?.substring(0, 4),
+        isValidFormat: this.isValidApiKeyFormat(this.apiKey),
         apiKeyPresent: !!this.apiKey,
         apiKeyValid: this.isValidApiKeyFormat(this.apiKey)
       });
@@ -866,51 +1368,75 @@ PRIORIDADE ABSOLUTA: Siga EXATAMENTE todas as configurações do prompt personal
           statusText: response.statusText,
           errorText
         });
-  
-        if (response.status === 429) {
-          return {
-            success: false,
-            error: 'Rate limit excedido. Tente novamente em alguns minutos.'
-          };
+        
+        // Marcar API como indisponível em caso de erro 503
+        if (response.status === 503) {
+          this.isApiAvailable = false;
+          this.lastApiCheck = Date.now();
         }
-  
-        return {
-          success: false,
-          error: `Erro na API: ${response.status} - ${response.statusText}`
-        };
+        
+        // Mensagens de erro mais amigáveis
+        let errorMessage = '';
+        switch (response.status) {
+          case 429:
+            errorMessage = 'Limite de requisições excedido. Aguarde um momento antes de tentar novamente.';
+            break;
+          case 503:
+            errorMessage = 'Serviço temporariamente indisponível. Tentando novamente...';
+            break;
+          case 502:
+            errorMessage = 'Erro no servidor. Tentando reconectar...';
+            break;
+          case 500:
+            errorMessage = 'Erro interno do servidor. Tentando novamente...';
+            break;
+          default:
+            errorMessage = `Erro na API: ${response.status} - ${response.statusText}`;
+        }
+        
+        throw new Error(errorMessage);
       }
   
       const data = await response.json();
-      console.log('📥 [DEBUG] Resposta da API recebida:', {
-        hasCandidates: !!data.candidates,
-        candidatesLength: data.candidates?.length || 0
-      });
+      console.log('✅ [SUCCESS] Resposta da API recebida:', data);
   
-      if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
-        const content = data.candidates[0].content.parts[0].text;
-        console.log('✅ [DEBUG] Conteúdo extraído com sucesso:', {
-          contentLength: content.length,
-          contentPreview: content.substring(0, 200) + '...'
-        });
-  
-        return {
-          success: true,
-          content: content
-        };
+      if (data.candidates && data.candidates.length > 0) {
+        const content = data.candidates[0].content?.parts?.[0]?.text || '';
+        
+        // Marcar API como disponível após sucesso
+        this.isApiAvailable = true;
+        this.lastApiCheck = Date.now();
+        
+        // Processar queue offline se houver mensagens pendentes
+        if (this.offlineQueue.length > 0) {
+          setTimeout(() => this.processOfflineQueue(), 1000);
+        }
+        
+        return { success: true, content };
       } else {
-        console.error('❌ [ERROR] Estrutura de resposta inválida:', data);
-        return {
-          success: false,
-          error: 'Resposta inválida da API'
-        };
+        throw new Error('Resposta inválida da API');
       }
-    } catch (error) {
-      console.error('❌ [ERROR] Erro na requisição:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
-      };
-    }
+    }, 'generateWithPrompt').catch(error => {
+      console.error('❌ [FINAL_ERROR] Erro final após todas as tentativas:', error);
+      
+      // Marcar API como indisponível após falhas consecutivas
+      this.isApiAvailable = false;
+      this.lastApiCheck = Date.now();
+      
+      // Mensagens de erro finais mais amigáveis
+      let finalErrorMessage = '';
+      if (error.message.includes('timeout')) {
+        finalErrorMessage = 'Timeout: A requisição demorou muito para responder. Verifique sua conexão.';
+      } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        finalErrorMessage = 'Erro de conexão: Verifique sua internet e tente novamente.';
+      } else if (error.message.includes('503')) {
+        finalErrorMessage = 'Serviço indisponível: A API Gemini está temporariamente fora do ar. Modo offline ativado.';
+      } else {
+        finalErrorMessage = error.message;
+      }
+      
+      return { success: false, error: finalErrorMessage };
+    });
   }
 }
 

@@ -63,7 +63,27 @@ const ProjectsPage: React.FC = () => {
   const loadProjects = async () => {
     try {
       setIsLoading(true);
+      console.log('[ProjectsPage] Iniciando carregamento de projetos...');
+      
+      // Aguardar inicialização do banco de dados
+      let retries = 0;
+      const maxRetries = 10;
+      
+      while (!database.isInitialized && retries < maxRetries) {
+        console.log(`[ProjectsPage] Aguardando inicialização do banco... (tentativa ${retries + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        retries++;
+      }
+      
+      if (!database.isInitialized) {
+        console.error('[ProjectsPage] Banco de dados não foi inicializado após múltiplas tentativas');
+        error('Erro de inicialização', 'Não foi possível inicializar o banco de dados');
+        return;
+      }
+      
+      console.log('[ProjectsPage] Banco inicializado, carregando projetos...');
       const projects = await database.getProjects();
+      console.log(`[ProjectsPage] ${projects.length} projetos carregados do banco`);
       
       // Converter formato do banco local para o formato esperado pela UI
       const formattedProjects = projects.map(project => ({
@@ -85,12 +105,14 @@ const ProjectsPage: React.FC = () => {
         outputPath: project.code ? `/generated/${project.id}` : undefined
       }));
       
+      console.log(`[ProjectsPage] ${formattedProjects.length} projetos formatados para exibição`);
       setProjects(formattedProjects);
     } catch (err) {
-      console.error('Erro ao carregar projetos:', err);
+      console.error('[ProjectsPage] Erro ao carregar projetos:', err);
       error('Erro inesperado', 'Ocorreu um erro inesperado ao carregar os projetos');
     } finally {
       setIsLoading(false);
+      console.log('[ProjectsPage] Carregamento de projetos finalizado');
     }
   };
 
@@ -284,7 +306,7 @@ const ProjectsPage: React.FC = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredProjects.map((project) => (
               <Card key={project.id} hover className="h-full">
                 <CardHeader>

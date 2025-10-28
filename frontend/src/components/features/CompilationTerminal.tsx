@@ -165,6 +165,17 @@ export const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
           '✅ Otimizações aplicadas'
         ];
         
+        console.log('📁 [COMPILATION_TERMINAL] Arquivos gerados:', {
+          filesCount: generatedFiles.length,
+          files: generatedFiles.map(f => ({ name: f.name, type: f.type, contentLength: f.content.length }))
+        });
+        
+        console.log('🔄 [COMPILATION_TERMINAL] Chamando onComplete com arquivos:', {
+          codeLength: response.code.length,
+          filesCount: generatedFiles.length,
+          logsCount: compilationLogs.length
+        });
+        
         // Chamar callback de sucesso
         onComplete(response.code, generatedFiles, compilationLogs);
         

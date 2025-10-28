@@ -151,19 +151,22 @@ export class CodeGenerationService {
           return {
             framework: 'Tailwind CSS via CDN',
             classes: 'Use classes responsivas do Tailwind (sm:, md:, lg:, xl:)',
-            instructions: '- Use Tailwind CSS via CDN para estilização'
+            instructions: '- Use Tailwind CSS via CDN para estilização',
+            cdnLink: '<script src="https://cdn.tailwindcss.com"></script>'
           };
         case 'bootstrap':
           return {
             framework: 'Bootstrap CSS via CDN',
             classes: 'Use classes responsivas do Bootstrap (col-sm-, col-md-, col-lg-, col-xl-)',
-            instructions: '- Use Bootstrap CSS via CDN para estilização'
+            instructions: '- Use Bootstrap CSS via CDN para estilização',
+            cdnLink: '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">'
           };
         case 'bulma':
           return {
             framework: 'Bulma CSS via CDN',
             classes: 'Use classes responsivas do Bulma (is-mobile, is-tablet, is-desktop)',
-            instructions: '- Use Bulma CSS via CDN para estilização'
+            instructions: '- Use Bulma CSS via CDN para estilização',
+            cdnLink: '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">'
           };
         case 'css':
         case 'pure':
@@ -171,7 +174,8 @@ export class CodeGenerationService {
           return {
             framework: 'CSS puro',
             classes: 'Use media queries para responsividade (@media screen and (min-width: ...))',
-            instructions: '- Use CSS puro com media queries para estilização'
+            instructions: '- Use CSS puro com media queries para estilização',
+            cdnLink: ''
           };
       }
     };
@@ -297,6 +301,12 @@ function saveChatHistory() {
 - NÃO use imports ou links para arquivos externos (exceto CDNs)
 - O arquivo deve ser 100% autossuficiente e funcionar offline
 
+🚨 IMAGENS - REGRA CRÍTICA:
+- NUNCA use URLs do Unsplash (source.unsplash.com ou images.unsplash.com)
+- SEMPRE use placeholders SVG inline para imagens
+- Use data:image/svg+xml;base64,[base64] para imagens
+- Exemplo: <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2U1ZTdlYiIvPgo8dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmaWxsPSIjNmI3MjgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+SW1hZ2VtPC90ZXh0Pgo8L3N2Zz4K" alt="Placeholder">
+
 🎯 ESTRUTURA OBRIGATÓRIA DO HTML:
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -403,6 +413,13 @@ ${request.enablePayments ? '- Inclua interface de pagamento simulada' : ''}
 - Garanta persistência de dados com localStorage
 - Adicione animações e transições suaves
 - Interface responsiva e mobile-first
+
+🚨 IMAGENS - REGRA CRÍTICA:
+- NUNCA use URLs do Unsplash (source.unsplash.com ou images.unsplash.com)
+- SEMPRE use placeholders SVG inline codificados em base64
+- Para imagens de produtos: use SVG com ícone de produto
+- Para avatares: use SVG com ícone de usuário
+- Para backgrounds: use gradientes CSS ou SVG patterns
 
 📋 FUNCIONALIDADES OBRIGATÓRIAS:
 - Navegação funcional entre seções
@@ -564,34 +581,25 @@ IMPORTANTE: Retorne APENAS o código HTML completo, sem explicações ou markdow
       return `data:image/svg+xml;base64,${Buffer.from(svgContent).toString('base64')}`;
     };
 
-    // Mapear URLs do Unsplash para placeholders específicos
-    const unsplashReplacements: { [key: string]: string } = {
-      'https://images.unsplash.com/photo-1620917637841-3b7c25143a4e': createPlaceholderSVG(400, 300, 'Paleta de Sombras'),
-      'https://images.unsplash.com/photo-1622384992984-78326e7922d5': createPlaceholderSVG(400, 300, 'Rímel'),
-      'https://images.unsplash.com/photo-1590890289136-11f44e156475': createPlaceholderSVG(400, 300, 'Blush Pêssego'),
-      'https://images.unsplash.com/photo-1596420455447-b2488a03f47c': createPlaceholderSVG(400, 300, 'Iluminador'),
-      'https://images.unsplash.com/photo-1616782299596-9818817a22ed': createPlaceholderSVG(400, 300, 'Corretivo'),
-      'https://images.unsplash.com/photo-1632731853610-c4e9f7833a6f': createPlaceholderSVG(400, 300, 'Base HD'),
-      'https://images.unsplash.com/photo-1603525547653-379e4d0d046f': createPlaceholderSVG(400, 300, 'Delineador')
-    };
-
     let fixedCode = code;
     
-    // Substituir URLs completas do Unsplash
-    Object.keys(unsplashReplacements).forEach(originalUrl => {
-      const regex = new RegExp(originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^"\'\\s]*', 'g');
-      fixedCode = fixedCode.replace(regex, unsplashReplacements[originalUrl] as string);
-    });
-
-    // Substituir qualquer URL do Unsplash restante (incluindo variações com parâmetros)
-    fixedCode = fixedCode.replace(/https:\/\/images\.unsplash\.com\/[^"'\s>]*/g, createPlaceholderSVG(400, 300, 'Produto'));
+    // Substituir TODAS as URLs do Unsplash (images.unsplash.com e source.unsplash.com)
+    fixedCode = fixedCode.replace(/https?:\/\/images\.unsplash\.com\/[^"'\s>)]*/g, createPlaceholderSVG(400, 300, 'Produto'));
+    fixedCode = fixedCode.replace(/https?:\/\/source\.unsplash\.com\/[^"'\s>)]*/g, createPlaceholderSVG(400, 300, 'Produto'));
     
-    // Substituir também URLs do Unsplash sem https
-    fixedCode = fixedCode.replace(/http:\/\/images\.unsplash\.com\/[^"'\s>]*/g, createPlaceholderSVG(400, 300, 'Produto'));
-    
-    // Substituir URLs do Unsplash em atributos src, srcset, data-src, etc.
-    fixedCode = fixedCode.replace(/(src|srcset|data-src|background-image|url)\s*[:=]\s*["']?https?:\/\/images\.unsplash\.com\/[^"'\s>)]*["']?/gi, 
+    // Substituir URLs do Unsplash em atributos específicos
+    fixedCode = fixedCode.replace(/(src|srcset|data-src|background-image|url)\s*[:=]\s*["']?https?:\/\/(images|source)\.unsplash\.com\/[^"'\s>)]*["']?/gi, 
       (match, attr) => `${attr}="${createPlaceholderSVG(400, 300, 'Produto')}"`);
+    
+    // Substituir URLs do Unsplash em CSS background-image
+    fixedCode = fixedCode.replace(/background-image\s*:\s*url\s*\(\s*["']?https?:\/\/(images|source)\.unsplash\.com\/[^"'\s>)]*["']?\s*\)/gi, 
+      `background-image: url("${createPlaceholderSVG(400, 300, 'Background')}")`);
+    
+    // Substituir URLs do Unsplash em CSS url()
+    fixedCode = fixedCode.replace(/url\s*\(\s*["']?https?:\/\/(images|source)\.unsplash\.com\/[^"'\s>)]*["']?\s*\)/gi, 
+      `url("${createPlaceholderSVG(400, 300, 'Imagem')}")`);
+    
+    console.log('🔧 [UNSPLASH_FIX] URLs do Unsplash substituídas por placeholders SVG');
     
     return fixedCode;
   }
@@ -611,15 +619,111 @@ IMPORTANTE: Retorne APENAS o código HTML completo, sem explicações ou markdow
   private extractFiles(code: string, request: CodeGenerationRequest): GeneratedFile[] {
     const files: GeneratedFile[] = [];
     
-    // APENAS o arquivo HTML principal - arquivo único conforme especificado
+    // Arquivo HTML principal
     files.push({
       path: 'index.html',
       content: code,
       type: 'html'
     });
 
-    // Não gerar arquivos adicionais para manter o conceito de arquivo único
-    // O objetivo é ter tudo em um único index.html funcional
+    // Para demonstrar a estrutura hierárquica, vamos gerar alguns arquivos adicionais
+    // baseados no tipo de aplicação
+    if (request.appType.toLowerCase().includes('e-commerce') || 
+        request.appType.toLowerCase().includes('loja') ||
+        request.appType.toLowerCase().includes('shop')) {
+      
+      // Estrutura para e-commerce
+      files.push({
+        path: 'src/components/Header.js',
+        content: '// Componente Header\nexport default function Header() {\n  return <header>Header Component</header>;\n}',
+        type: 'js'
+      });
+      
+      files.push({
+        path: 'src/components/ProductCard.js',
+        content: '// Componente ProductCard\nexport default function ProductCard() {\n  return <div>Product Card</div>;\n}',
+        type: 'js'
+      });
+      
+      files.push({
+        path: 'src/styles/main.css',
+        content: '/* Estilos principais */\nbody {\n  margin: 0;\n  font-family: Arial, sans-serif;\n}',
+        type: 'css'
+      });
+      
+      files.push({
+        path: 'src/styles/components.css',
+        content: '/* Estilos dos componentes */\n.header {\n  background: #333;\n  color: white;\n}',
+        type: 'css'
+      });
+      
+      files.push({
+        path: 'config/database.json',
+        content: '{\n  "host": "localhost",\n  "port": 5432,\n  "database": "ecommerce"\n}',
+        type: 'json'
+      });
+      
+    } else if (request.appType.toLowerCase().includes('blog') || 
+               request.appType.toLowerCase().includes('portfolio')) {
+      
+      // Estrutura para blog/portfolio
+      files.push({
+        path: 'src/components/Navigation.js',
+        content: '// Componente Navigation\nexport default function Navigation() {\n  return <nav>Navigation Component</nav>;\n}',
+        type: 'js'
+      });
+      
+      files.push({
+        path: 'src/components/PostCard.js',
+        content: '// Componente PostCard\nexport default function PostCard() {\n  return <article>Post Card</article>;\n}',
+        type: 'js'
+      });
+      
+      files.push({
+        path: 'src/assets/styles/theme.css',
+        content: '/* Tema do blog */\n:root {\n  --primary-color: #2563eb;\n  --secondary-color: #64748b;\n}',
+        type: 'css'
+      });
+      
+      files.push({
+        path: 'content/posts/primeiro-post.md',
+        content: '# Primeiro Post\n\nEste é o conteúdo do primeiro post do blog.',
+        type: 'md'
+      });
+      
+    } else {
+      // Estrutura padrão para outros tipos de aplicação
+      files.push({
+        path: 'src/App.js',
+        content: '// Componente principal da aplicação\nexport default function App() {\n  return <div>App Component</div>;\n}',
+        type: 'js'
+      });
+      
+      files.push({
+        path: 'src/utils/helpers.js',
+        content: '// Funções utilitárias\nexport function formatDate(date) {\n  return new Date(date).toLocaleDateString();\n}',
+        type: 'js'
+      });
+      
+      files.push({
+        path: 'public/styles.css',
+        content: '/* Estilos globais */\n* {\n  box-sizing: border-box;\n}\n\nbody {\n  margin: 0;\n  padding: 0;\n}',
+        type: 'css'
+      });
+    }
+    
+    // Arquivos comuns para todos os projetos
+    files.push({
+      path: 'package.json',
+      content: this.generatePackageJson(request),
+      type: 'json'
+    });
+    
+    files.push({
+      path: 'README.md',
+      content: this.generateReadme(request),
+      type: 'md'
+    });
 
     return files;
   }

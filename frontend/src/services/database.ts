@@ -35,8 +35,12 @@ export interface Settings {
 
 class SQLiteManager {
   private db: Database | null = null;
-  private isInitialized = false;
+  private _isInitialized = false;
   private SQL: any = null;
+
+  get isInitialized(): boolean {
+    return this._isInitialized;
+  }
 
   async init(): Promise<boolean> {
     try {
@@ -58,7 +62,7 @@ class SQLiteManager {
         console.log('Novo banco de dados criado');
       }
 
-      this.isInitialized = true;
+      this._isInitialized = true;
       return true;
     } catch (error) {
       console.error('Erro ao inicializar SQLite:', error);
@@ -413,6 +417,45 @@ class SQLiteManager {
     } catch (error) {
       console.error('❌ [DATABASE] Erro ao buscar versões:', error);
       return [];
+    }
+  }
+
+  async updateVersion(id: string, updates: Partial<Pick<ProjectVersion, 'prompt' | 'code'>>): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    console.log('🔍 [DATABASE] Atualizando versão:', {
+      id,
+      hasPrompt: !!updates.prompt,
+      hasCode: !!updates.code,
+      codeLength: updates.code?.length || 0
+    });
+
+    const fields = [];
+    const values = [];
+
+    if (updates.prompt !== undefined) {
+      fields.push('prompt = ?');
+      values.push(updates.prompt);
+    }
+    if (updates.code !== undefined) {
+      fields.push('code = ?');
+      values.push(updates.code);
+    }
+
+    if (fields.length > 0) {
+      values.push(id);
+
+      try {
+        this.db.run(`UPDATE versions SET ${fields.join(', ')} WHERE id = ?`, values);
+        console.log('✅ [DATABASE] Versão atualizada com sucesso');
+        this.saveToLocalStorage();
+        console.log('✅ [DATABASE] Banco salvo no localStorage após atualização');
+      } catch (error) {
+        console.error('❌ [DATABASE] Erro ao atualizar versão:', error);
+        throw error;
+      }
+    } else {
+      console.log('⚠️ [DATABASE] Nenhum campo para atualizar na versão');
     }
   }
 }

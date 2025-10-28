@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import { EnhanceButton } from '@/components/ui/EnhanceButton';
 import { CompilationTerminal } from '@/components/features/CompilationTerminal';
 import { APP_TYPES, FRONTEND_STACKS, CSS_FRAMEWORKS, COLOR_THEMES, FONT_FAMILIES, LAYOUT_STYLES } from '../../../shared/types';
 import { APP_TYPES_EXPANDED, FRONTEND_STACKS_EXPANDED, CSS_FRAMEWORKS_EXPANDED } from '@/constants/settingsOptions';
@@ -15,6 +16,7 @@ import { AppConfig } from '@/types/app';
 import { database } from '@/services/database';
 import { geminiService } from '@/services/gemini';
 import { settingsService } from '@/services/settingsService';
+import { promptEnhanceService } from '@/services/promptEnhanceService';
 import { LayoutValidator, LayoutValidationResult } from '@/utils/layoutValidator';
 
 // Mapeamento de opções de layout por plataforma
@@ -816,6 +818,7 @@ const CreateAppPage: React.FC = () => {
     authType: 'simple',
     customLayoutElements: [], // Para elementos do layout personalizado
     useDefaultSettings: null, // Nova propriedade para configurações padrão vs personalizar
+    useAICreative: null, // Nova propriedade para IA criativa
     integrations: {} as Record<string, any> // Para armazenar integrações selecionadas e suas API keys
   });
 
@@ -833,6 +836,9 @@ const CreateAppPage: React.FC = () => {
 
   const [isCreating, setIsCreating] = useState(false);
   const [generatedPrompt, setGeneratedPrompt] = useState('');
+  
+  // Estados para o aprimoramento de descrição
+  const [isEnhancing, setIsEnhancing] = useState(false);
   
   // Estados para o terminal de compilação
   const [showCompilationTerminal, setShowCompilationTerminal] = useState(false);
@@ -1204,13 +1210,53 @@ const CreateAppPage: React.FC = () => {
     }));
   };
 
+  // Função para aprimorar a descrição usando IA
+  const handleEnhanceDescription = async () => {
+    if (!formData.description.trim()) {
+      error('Descrição vazia', 'Por favor, digite uma descrição antes de aprimorar.');
+      return;
+    }
+
+    setIsEnhancing(true);
+    
+    try {
+      console.log('🚀 [ENHANCE] Iniciando aprimoramento da descrição:', formData.description);
+      
+      const result = await promptEnhanceService.enhanceAppDescription(formData.description);
+      
+      if (result.success && result.enhancedDescription) {
+        console.log('✅ [ENHANCE] Descrição aprimorada com sucesso');
+        
+        // Atualizar a descrição no formData
+        setFormData(prev => ({
+          ...prev,
+          description: result.enhancedDescription!
+        }));
+        
+        success('Descrição aprimorada!', 'A IA analisou e expandiu sua descrição com mais detalhes funcionais.');
+      } else {
+        console.error('❌ [ENHANCE] Erro ao aprimorar descrição:', result.error);
+        error('Erro ao aprimorar', result.error || 'Não foi possível aprimorar a descrição.');
+      }
+    } catch (err) {
+      console.error('❌ [ENHANCE] Erro inesperado:', err);
+      error('Erro inesperado', 'Ocorreu um erro inesperado ao aprimorar a descrição.');
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
+
   const handleLayoutChange = (layoutValue: string) => {
     setFormData(prev => ({ ...prev, layoutStyle: layoutValue }));
   };
 
   // Funções específicas para evitar loop infinito
   const handleUseDefaultSettingsChange = useCallback((value: boolean) => {
-    setFormData(prev => ({ ...prev, useDefaultSettings: value }));
+    setFormData(prev => ({ ...prev, useDefaultSettings: value, useAICreative: null }));
+  }, []);
+
+  const handleUseAICreativeChange = useCallback((value: boolean) => {
+    setFormData(prev => ({ ...prev, useAICreative: value, useDefaultSettings: null }));
   }, []);
 
   const handleFrontendStackChange = useCallback((value: string) => {
@@ -1358,32 +1404,62 @@ const CreateAppPage: React.FC = () => {
 
       console.log('✅ [DEBUG] Serviços inicializados, criando projeto...');
 
+      // Se IA Criativa está selecionada, usar configurações especiais para liberdade criativa
+      let finalFormData = { ...formData };
+      if (formData.useAICreative === true) {
+        console.log('🤖 [DEBUG] IA Criativa selecionada - configurando para liberdade criativa total...');
+        finalFormData = {
+          ...formData,
+          // Configurações especiais que indicam "escolha livre da IA"
+          appType: 'ai-creative',
+          frontendStack: 'ai-choice',
+          cssFramework: 'ai-choice',
+          colorTheme: 'ai-creative',
+          mainFont: 'ai-choice',
+          layoutStyle: 'ai-creative',
+          platformType: 'web',
+          menuStructure: 'ai-creative',
+          enableAuth: false,
+          enableDatabase: false,
+          enablePayments: false,
+          authProvider: '',
+          databaseType: '',
+          paymentProvider: '',
+          authType: 'email',
+          adminUsername: '',
+          adminPassword: '',
+          customLayoutElements: []
+        };
+        console.log('🤖 [DEBUG] Configurações para IA Criativa aplicadas:', finalFormData);
+      }
+
       // Criar um user_id padrão se não existir
       const userId = 'default-user';
 
       const projectData = {
         user_id: userId,
-        title: formData.name,
-        description: formData.description || '',
+        title: finalFormData.name,
+        description: finalFormData.description || '',
         config: {
-          appType: formData.appType,
-          frontendStack: formData.frontendStack,
-          cssFramework: formData.cssFramework,
-          colorTheme: formData.colorTheme,
-          mainFont: formData.mainFont,
-          layoutStyle: formData.layoutStyle,
-          enableAuth: formData.enableAuth,
-          enableDatabase: formData.enableDatabase,
-          enablePayments: formData.enablePayments,
-          authProvider: formData.authProvider,
-          databaseType: formData.databaseType,
-          paymentProvider: formData.paymentProvider,
-          platformType: formData.platformType,
-          menuStructure: formData.menuStructure,
-          adminUsername: formData.adminUsername,
-          adminPassword: formData.adminPassword,
-          authType: formData.authType,
-          customLayoutElements: formData.customLayoutElements
+          appType: finalFormData.appType,
+          frontendStack: finalFormData.frontendStack,
+          cssFramework: finalFormData.cssFramework,
+          colorTheme: finalFormData.colorTheme,
+          mainFont: finalFormData.mainFont,
+          layoutStyle: finalFormData.layoutStyle,
+          enableAuth: finalFormData.enableAuth,
+          enableDatabase: finalFormData.enableDatabase,
+          enablePayments: finalFormData.enablePayments,
+          authProvider: finalFormData.authProvider,
+          databaseType: finalFormData.databaseType,
+          paymentProvider: finalFormData.paymentProvider,
+          platformType: finalFormData.platformType,
+          menuStructure: finalFormData.menuStructure,
+          adminUsername: finalFormData.adminUsername,
+          adminPassword: finalFormData.adminPassword,
+          authType: finalFormData.authType,
+          customLayoutElements: finalFormData.customLayoutElements,
+          useAICreative: finalFormData.useAICreative
         }
       };
 
@@ -1481,9 +1557,16 @@ const CreateAppPage: React.FC = () => {
           />
           
           <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-300">
-              Descrição do App *
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-300">
+                Descrição do App *
+              </label>
+              <EnhanceButton
+                onClick={handleEnhanceDescription}
+                loading={isEnhancing}
+                disabled={!formData.description.trim() || isEnhancing}
+              />
+            </div>
             <textarea
               name="description"
               value={formData.description}
@@ -1511,7 +1594,7 @@ const CreateAppPage: React.FC = () => {
               <p className="text-gray-400 text-sm">Escolha entre usar configurações padrão ou personalizar cada aspecto</p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Configurações Padrão */}
               <div
                 onClick={() => handleUseDefaultSettingsChange(true)}
@@ -1629,6 +1712,59 @@ const CreateAppPage: React.FC = () => {
                     <li className="flex items-center">
                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2"></span>
                       Configure layout e navegação
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* IA Criativa */}
+              <div
+                onClick={() => handleUseAICreativeChange(true)}
+                className={`group relative p-8 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl min-h-[200px] flex flex-col ${
+                  formData.useAICreative === true
+                    ? 'border-purple-500 bg-gradient-to-br from-purple-500/20 to-purple-600/10 shadow-lg shadow-purple-500/25'
+                    : 'border-gray-600/50 bg-gradient-to-br from-gray-800/60 to-gray-900/40 hover:border-gray-500/70 hover:from-gray-700/60 hover:to-gray-800/40 backdrop-blur-sm'
+                }`}
+              >
+                {formData.useAICreative === true && (
+                  <div className="absolute top-4 right-4 w-8 h-8 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/50">
+                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+                
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-2xl flex items-center justify-center">
+                    <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-white font-bold text-xl mb-2 group-hover:text-purple-300 transition-colors duration-300">
+                    🤖 IA Criativa
+                  </h3>
+                </div>
+                
+                <div className="flex-grow">
+                  <p className="text-gray-400 text-sm leading-relaxed mb-4 group-hover:text-gray-300 transition-colors duration-300">
+                    Deixe o Gemini escolher automaticamente as melhores configurações para seu projeto
+                  </p>
+                  <ul className="text-gray-500 text-xs space-y-2">
+                    <li className="flex items-center">
+                      <span className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></span>
+                      Stack frontend otimizado
+                    </li>
+                    <li className="flex items-center">
+                      <span className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></span>
+                      Paleta de cores harmoniosa
+                    </li>
+                    <li className="flex items-center">
+                      <span className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></span>
+                      Tipografia adequada
+                    </li>
+                    <li className="flex items-center">
+                      <span className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></span>
+                      Layout responsivo único
                     </li>
                   </ul>
                 </div>
@@ -2995,18 +3131,49 @@ const CreateAppPage: React.FC = () => {
 
             
             {!showCompilationTerminal && currentStep < WIZARD_STEPS.length ? (
-              <Button
-                type="button"
-                onClick={nextStep}
-                className="w-full sm:w-auto group px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-center space-x-2 sm:space-x-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg shadow-blue-600/25"
-              >
-                <span className="font-medium text-sm sm:text-base">Próximo</span>
-                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-all duration-300">
-                  <svg className="w-3 h-3 sm:w-4 sm:h-4 transition-transform duration-300 group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </Button>
+              // Verificar se estamos na etapa 2 e IA Criativa está selecionada
+              currentStep === 2 && formData.useAICreative === true ? (
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isCreating || !formData.name || !formData.description}
+                  className="w-full sm:w-auto group px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-center space-x-2 sm:space-x-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg shadow-green-600/25"
+                >
+                  {isCreating ? (
+                    <>
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center">
+                        <svg className="animate-spin w-3 h-3 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </div>
+                      <span className="font-medium text-sm sm:text-base">Gerando App...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium text-sm sm:text-base">Gerar App</span>
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-all duration-300">
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </div>
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={nextStep}
+                  className="w-full sm:w-auto group px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-center space-x-2 sm:space-x-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg shadow-blue-600/25"
+                >
+                  <span className="font-medium text-sm sm:text-base">Próximo</span>
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-all duration-300">
+                    <svg className="w-3 h-3 sm:w-4 sm:h-4 transition-transform duration-300 group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </Button>
+              )
             ) : !showCompilationTerminal ? (
               <Button
                 type="button"

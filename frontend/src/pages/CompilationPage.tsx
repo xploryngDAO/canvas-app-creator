@@ -48,15 +48,23 @@ const CompilationPage: React.FC = () => {
           projectId: location.state.projectId,
           existingVersionsCount: existingVersions.length,
           hasVersion1,
+          isNewProject: location.state.isNewProject,
           existingVersions: existingVersions.map(v => ({ id: v.id, version_number: v.version_number }))
         });
         
-        if (hasVersion1) {
-          console.log('⚠️ [DEBUG] Versão 1 já existe para este projeto, pulando criação');
+        // CORREÇÃO: Lógica corrigida para criação da versão 1
+        // Só pular se é um projeto existente E já tem versão 1
+        if (hasVersion1 && !location.state.isNewProject) {
+          console.log('⚠️ [DEBUG] Versão 1 já existe para projeto existente, pulando criação');
         } else {
+          console.log('✅ [DEBUG] Criando/atualizando versão 1:', {
+            hasVersion1,
+            isNewProject: location.state.isNewProject,
+            reason: hasVersion1 ? 'Novo projeto com versão 1 existente - atualizando' : 'Primeira versão do projeto'
+          });
           const versionData = {
             project_id: location.state.projectId,
-            version_number: 1,
+            version_number: hasVersion1 ? 1 : 1, // Sempre versão 1 para compilação inicial
             prompt: `Projeto inicial criado via Wizard: ${location.state.projectName || appConfig?.name || 'Sem nome'}`,
             code: code
           };
@@ -66,24 +74,52 @@ const CompilationPage: React.FC = () => {
             version_number: versionData.version_number,
             prompt: versionData.prompt,
             hasCode: !!versionData.code,
-            codeLength: versionData.code?.length || 0
+            codeLength: versionData.code?.length || 0,
+            isNewProject: location.state.isNewProject,
+            willOverwrite: hasVersion1
           });
 
-          const versionId = await database.createVersion(versionData);
-          
-          console.log('✅ [DEBUG] Versão 1 criada com sucesso:', {
-            versionId,
-            projectId: location.state.projectId,
-            versionNumber: 1
-          });
+          // Se já existe versão 1 e é um novo projeto, atualizar em vez de criar
+          if (hasVersion1 && location.state.isNewProject) {
+            console.log('🔄 [DEBUG] Atualizando versão 1 existente para novo projeto');
+            const existingVersion1 = existingVersions.find(v => v.version_number === 1);
+            if (existingVersion1) {
+              await database.updateVersion(existingVersion1.id, {
+                prompt: versionData.prompt,
+                code: versionData.code
+              });
+              console.log('✅ [DEBUG] Versão 1 atualizada com sucesso:', existingVersion1.id);
+            }
+          } else {
+            const versionId = await database.createVersion(versionData);
+            console.log('✅ [DEBUG] Versão 1 criada com sucesso:', {
+              versionId,
+              projectId: location.state.projectId,
+              versionNumber: 1
+            });
+          }
 
-          // Verificar se a versão foi realmente salva
+          // Verificar se a versão foi realmente salva/atualizada
           const savedVersions = await database.getVersions(location.state.projectId);
-          console.log('🔍 [DEBUG] Versões salvas no banco após criação:', savedVersions);
+          console.log('🔍 [DEBUG] Versões salvas no banco após operação:', {
+            count: savedVersions.length,
+            versions: savedVersions.map(v => ({ 
+              id: v.id, 
+              version_number: v.version_number,
+              hasCode: !!v.code,
+              codeLength: v.code?.length || 0
+            }))
+          });
         }
       } catch (versionError) {
-        console.error('❌ [DEBUG] Erro ao criar versão 1:', versionError);
+        console.error('❌ [DEBUG] Erro ao criar/atualizar versão 1:', versionError);
         console.error('❌ [DEBUG] Stack trace:', versionError.stack);
+        console.error('❌ [DEBUG] Contexto do erro:', {
+          projectId: location.state.projectId,
+          hasCode: !!code,
+          codeLength: code?.length || 0,
+          locationState: location.state
+        });
       }
     } else {
       console.log('⚠️ [DEBUG] Não foi possível criar versão 1 - dados insuficientes:', {
@@ -93,14 +129,15 @@ const CompilationPage: React.FC = () => {
       });
     }
     
-    // Redirecionar para a IDE após 2 segundos
+    // Redirecionar para a IDE após 2 segundos, passando o projectId
     setTimeout(() => {
       navigate('/ide', {
         state: {
           appConfig,
           generatedCode: code,
           generatedFiles: files || [],
-          compilationLogs: logs || []
+          compilationLogs: logs || [],
+          projectId: location.state?.projectId // CORREÇÃO: Passar o projectId para a IDE
         }
       });
     }, 2000);
