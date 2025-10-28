@@ -135,7 +135,7 @@ export const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
       
       // Usar o serviço Gemini para gerar o código
       console.log(`🚀 [FEATURES_TERMINAL] Iniciando chamada à API Gemini para: ${operationId}`);
-      const response = await geminiService.generateApp(appConfig);
+      const response = await geminiService.generate(appConfig);
       
       console.log(`✅ [FEATURES_TERMINAL] Resposta recebida da API Gemini para: ${operationId}`, {
         success: response.success,
@@ -252,7 +252,7 @@ export const CompilationTerminal: React.FC<CompilationTerminalProps> = ({
         {/* Simulador de código */}
         <div 
           ref={simulatorRef}
-          className="flex-1 overflow-y-auto space-y-1 mb-4"
+          className="flex-1 overflow-hidden space-y-1 mb-4"
           style={{ maxHeight: 'calc(100% - 100px)' }}
         >
           {codeLines.map((line, index) => (

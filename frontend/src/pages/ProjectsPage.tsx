@@ -28,6 +28,13 @@ interface FormattedProject extends Project {
 }
 
 const ProjectsPage: React.FC = () => {
+  // Adicionar classe CSS para permitir scroll na página Projects
+  React.useEffect(() => {
+    document.body.classList.add('scrollable-page');
+    return () => {
+      document.body.classList.remove('scrollable-page');
+    };
+  }, []);
   const { success, error } = useToast();
   const [projects, setProjects] = useState<FormattedProject[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<FormattedProject[]>([]);

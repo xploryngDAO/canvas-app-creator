@@ -6,6 +6,13 @@ import Button from '@/components/ui/Button';
 import ResourceTags from '@/components/features/ResourceTags';
 
 const HomePage: React.FC = () => {
+  // Adicionar classe CSS para permitir scroll na página Home
+  React.useEffect(() => {
+    document.body.classList.add('scrollable-page');
+    return () => {
+      document.body.classList.remove('scrollable-page');
+    };
+  }, []);
   const features = [
     {
       icon: Zap,

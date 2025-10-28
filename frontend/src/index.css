@@ -2,6 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CSS global base */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  height: 100vh;
+}
+
+/* Remover scroll apenas na página IDE */
+.ide-page {
+  overflow: hidden;
+  height: 100vh;
+}
+
+.ide-page html,
+.ide-page body,
+.ide-page #root {
+  overflow: hidden;
+}
+
+/* Permitir scroll nas outras páginas */
+.scrollable-page {
+  overflow-y: auto;
+  height: auto;
+  min-height: 100vh;
+}
+
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   line-height: 1.5;

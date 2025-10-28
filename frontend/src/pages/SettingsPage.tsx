@@ -18,6 +18,13 @@ import {
 } from '@/constants/settingsOptions';
 
 const SettingsPage: React.FC = () => {
+  // Adicionar classe CSS para permitir scroll na página Settings
+  React.useEffect(() => {
+    document.body.classList.add('scrollable-page');
+    return () => {
+      document.body.classList.remove('scrollable-page');
+    };
+  }, []);
   const { success, error } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -55,8 +62,11 @@ const SettingsPage: React.FC = () => {
     try {
       setIsLoading(true);
       
+      console.log('🔄 [SETTINGS] Iniciando carregamento das configurações...');
+      
       // Initialize settings service
       await settingsService.init();
+      console.log('✅ [SETTINGS] SettingsService inicializado');
       
       // Load all settings with proper error handling
       const settingKeys = [
@@ -73,18 +83,32 @@ const SettingsPage: React.FC = () => {
         'darkMode',
         'autoSave',
         'notifications',
-        'defaultCustomLayoutElements'
+        'defaultCustomLayoutElements',
+        'defaultDatabaseType',
+        'defaultPaymentProvider',
+        'defaultEnableDatabase',
+        'defaultEnablePayments',
+        'defaultAuthType',
+        'defaultEnableAuth'
       ];
+
+      console.log('🔍 [SETTINGS] Carregando configurações:', settingKeys);
 
       const responses = await Promise.allSettled(
         settingKeys.map(key => settingsService.getSetting(key))
       );
 
+      console.log('📥 [SETTINGS] Respostas recebidas:', responses);
+
       // Extract values with fallbacks for missing settings
       const getValue = (index: number, fallback: string | boolean | string[]) => {
         const response = responses[index];
+        console.log(`🔍 [SETTINGS] Processando ${settingKeys[index]}:`, response);
+        
         if (response.status === 'fulfilled' && response.value.success && response.value.data) {
           const value = response.value.data.value;
+          console.log(`✅ [SETTINGS] ${settingKeys[index]} encontrado:`, value);
+          
           if (typeof fallback === 'boolean') return value === 'true';
           if (Array.isArray(fallback)) {
             try {
@@ -95,10 +119,12 @@ const SettingsPage: React.FC = () => {
           }
           return value;
         }
+        
+        console.log(`⚠️ [SETTINGS] ${settingKeys[index]} não encontrado, usando fallback:`, fallback);
         return fallback;
       };
 
-      setSettings({
+      const newSettings = {
         geminiApiKey: getValue(0, '') as string,
         geminiModel: getValue(1, 'gemini-2.5-flash') as string,
         defaultAppType: getValue(2, 'landing-page') as string,
@@ -109,22 +135,28 @@ const SettingsPage: React.FC = () => {
         defaultFontFamily: getValue(7, 'Inter') as string,
         defaultLayoutStyle: getValue(8, 'modern') as string,
         defaultMenuStructure: getValue(9, 'sidebar') as string,
+        darkMode: getValue(10, true) as boolean,
+        autoSave: getValue(11, true) as boolean,
+        notifications: getValue(12, true) as boolean,
+        defaultCustomLayoutElements: getValue(13, []) as string[],
         defaultDatabaseType: getValue(14, 'none') as string,
         defaultPaymentProvider: getValue(15, 'none') as string,
         defaultEnableDatabase: getValue(16, false) as boolean,
         defaultEnablePayments: getValue(17, false) as boolean,
-        defaultEnableAuth: getValue(19, false) as boolean,
         defaultAuthType: getValue(18, 'simple') as string,
-        darkMode: getValue(10, true) as boolean,
-        autoSave: getValue(11, true) as boolean,
-        notifications: getValue(12, true) as boolean,
-        defaultCustomLayoutElements: getValue(13, []) as string[]
-      });
+        defaultEnableAuth: getValue(19, false) as boolean
+      };
+
+      console.log('🎯 [SETTINGS] Configurações finais:', newSettings);
+      setSettings(newSettings);
+      
     } catch (err) {
+      console.error('❌ [SETTINGS] Erro ao carregar configurações:', err);
       console.warn('Some settings could not be loaded, using defaults:', err);
       // Don't show error toast for missing settings, just use defaults
     } finally {
       setIsLoading(false);
+      console.log('✅ [SETTINGS] Carregamento finalizado');
     }
   };
 

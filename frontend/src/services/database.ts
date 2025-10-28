@@ -249,29 +249,76 @@ class SQLiteManager {
 
   // === SETTINGS ===
   async getSetting(key: string): Promise<{ key: string; value: string } | null> {
-    if (!this.db) return null;
+    if (!this.db) {
+      console.error('❌ [DATABASE] Banco de dados não inicializado ao tentar buscar setting:', key);
+      return null;
+    }
 
-    const result = this.db.exec("SELECT key, value FROM settings WHERE key = ?", [key]);
-    if (!result[0] || !result[0].values[0]) return null;
+    console.log('🔍 [DATABASE] Buscando setting no banco:', key);
 
-    return {
-      key: result[0].values[0][0] as string,
-      value: result[0].values[0][1] as string
-    };
+    try {
+      const result = this.db.exec("SELECT key, value FROM settings WHERE key = ?", [key]);
+      
+      console.log('📊 [DATABASE] Resultado da query:', {
+        key,
+        hasResult: !!result[0],
+        hasValues: !!(result[0] && result[0].values[0]),
+        resultLength: result[0]?.values?.length || 0
+      });
+      
+      if (!result[0] || !result[0].values[0]) {
+        console.log('⚠️ [DATABASE] Setting não encontrado:', key);
+        return null;
+      }
+
+      const setting = {
+        key: result[0].values[0][0] as string,
+        value: result[0].values[0][1] as string
+      };
+      
+      console.log('✅ [DATABASE] Setting encontrado:', {
+        key: setting.key,
+        valueLength: setting.value?.length || 0,
+        valuePreview: key === 'geminiApiKey' && setting.value ? `${setting.value.substring(0, 10)}...` : setting.value
+      });
+
+      return setting;
+    } catch (error) {
+      console.error('❌ [DATABASE] Erro ao buscar setting:', error);
+      return null;
+    }
   }
 
   async setSetting(key: string, value: string): Promise<void> {
-    if (!this.db) return;
+    if (!this.db) {
+      console.error('❌ [DATABASE] Banco de dados não inicializado ao tentar salvar setting:', key);
+      return;
+    }
+
+    console.log('💾 [DATABASE] Salvando setting no banco:', {
+      key,
+      valueLength: value?.length || 0,
+      valuePreview: key === 'geminiApiKey' && value ? `${value.substring(0, 10)}...` : value
+    });
 
     const now = new Date().toISOString();
     
-    // Usar REPLACE para inserir ou atualizar
-    this.db.run(
-      "REPLACE INTO settings (key, value, created_at, updated_at) VALUES (?, ?, COALESCE((SELECT created_at FROM settings WHERE key = ?), ?), ?)",
-      [key, value, key, now, now]
-    );
+    try {
+      // Usar REPLACE para inserir ou atualizar
+      this.db.run(
+        "REPLACE INTO settings (key, value, created_at, updated_at) VALUES (?, ?, COALESCE((SELECT created_at FROM settings WHERE key = ?), ?), ?)",
+        [key, value, key, now, now]
+      );
 
-    this.saveToLocalStorage();
+      console.log('✅ [DATABASE] Setting salvo com sucesso:', key);
+      
+      this.saveToLocalStorage();
+      
+      console.log('💾 [DATABASE] Banco salvo no localStorage');
+    } catch (error) {
+      console.error('❌ [DATABASE] Erro ao salvar setting:', error);
+      throw error;
+    }
   }
 
   async getAllSettings(): Promise<{ key: string; value: string }[]> {

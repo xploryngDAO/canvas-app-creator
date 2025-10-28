@@ -57,6 +57,8 @@ import {
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { database } from '@/services/database';
+import AICopilot from '@/components/features/AICopilot';
+import { versioningService } from '@/services/versioningService';
 
 interface IDEPageProps {}
 
@@ -72,6 +74,13 @@ type CanvasTabType = 'preview' | 'canvas' | 'tarefas' | 'dashboard' | 'roadmap' 
 type EditorSubTabType = 'code-generator' | 'refactor-agent' | 'debug-agent' | 'test-agent';
 
 const IDEPage: React.FC<IDEPageProps> = () => {
+  // Adicionar classe CSS para remover scroll apenas na página IDE
+  useEffect(() => {
+    document.body.classList.add('ide-page');
+    return () => {
+      document.body.classList.remove('ide-page');
+    };
+  }, []);
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId, versionId } = useParams<{ projectId?: string; versionId?: string }>();
@@ -271,7 +280,7 @@ const IDEPage: React.FC<IDEPageProps> = () => {
   const handleMouseMoveVertical = (e: MouseEvent) => {
     if (!isResizingVertical) return;
     
-    const containerHeight = window.innerHeight - 24; // Subtraindo margem inferior (pb-6 = 24px)
+    const containerHeight = window.innerHeight; // Altura total da tela
     const newHeight = (e.clientY / containerHeight) * 100;
     
     if (newHeight >= 20 && newHeight <= 75) { // Reduzindo limite máximo para respeitar margem
@@ -829,222 +838,67 @@ Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
     switch (tabType) {
       case 'copilot':
         return (
-          <div className="flex flex-col h-full">
-            {/* Painel de perguntas rápidas colapsível */}
-            <div className="border-b border-gray-700/50">
-              <button
-                onClick={() => setIsQuestionsPanelExpanded(!isQuestionsPanelExpanded)}
-                className="w-full flex items-center justify-between p-3 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/30 transition-all"
-              >
-                <span>Perguntas Rápidas</span>
-                {isQuestionsPanelExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              </button>
+          <AICopilot 
+            currentCode={generatedCode}
+            appConfig={appConfig}
+            onCodeUpdate={async (newCode, explanation, userPrompt) => {
+              // Atualizar código na interface
+              setGeneratedCode(newCode);
+              console.log('🔄 [IDE_PAGE] Código atualizado via AICopilot:', explanation);
               
-              {isQuestionsPanelExpanded && (
-                <div className="p-3 space-y-2 bg-gray-800/30">
-                  {[
-                    'Como criar um componente React?',
-                    'Adicionar validação de formulário',
-                    'Implementar autenticação',
-                    'Configurar roteamento'
-                  ].map((question, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setChatMessage(question)}
-                      className="w-full text-left p-2 text-xs text-gray-400 hover:text-white hover:bg-gray-700/50 rounded transition-all"
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Área de conversa */}
-            <div className="flex-1 p-4 overflow-y-auto">
-              <div className="text-center text-gray-500 mt-8">
-                <Bot size={48} className="mx-auto mb-4 opacity-50" />
-                <p>Olá! Como posso ajudar você hoje?</p>
-              </div>
-            </div>
-
-            {/* Input fixo no rodapé com botões integrados */}
-            <div className="border-t border-gray-700/50 p-3 sm:p-4 bg-gray-800/30 mt-4">
-              {/* Seletores de LLM e Agente */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 mb-3 w-full">
-                {/* Seletor de LLM */}
-                <div className="relative flex-1 sm:flex-1">
-                  <button
-                    onClick={() => setShowLLMDropdown(!showLLMDropdown)}
-                    className="flex items-center justify-between w-full space-x-1 px-2 py-1.5 bg-gray-700/70 border border-gray-600/70 rounded-md text-xs text-gray-200 hover:text-white hover:bg-gray-600/70 transition-all"
-                  >
-                    <span className="truncate">{selectedLLM}</span>
-                    <ChevronDown size={10} className="flex-shrink-0" />
-                  </button>
-                  {showLLMDropdown && (
-                    <div className="absolute bottom-full mb-2 left-0 right-0 sm:right-auto bg-gray-800 border border-gray-600/50 rounded-lg shadow-lg z-10 min-w-[150px]">
-                      {['Gemini 2.5 Flash', 'Claude 4 Sonet', 'Gemini Pro', 'GPT-4', 'GPT-3.5'].map((llm) => (
-                        <button
-                          key={llm}
-                          onClick={() => {
-                            setSelectedLLM(llm);
-                            setShowLLMDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700/50 first:rounded-t-lg last:rounded-b-lg transition-all"
-                        >
-                          {llm}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Seletor de Agente */}
-                <div className="relative flex-1 sm:flex-1">
-                  <button
-                    onClick={() => setShowAgentDropdown(!showAgentDropdown)}
-                    className="flex items-center justify-between w-full space-x-1 px-2 py-1.5 bg-gray-700/70 border border-gray-600/70 rounded-md text-xs text-gray-200 hover:text-white hover:bg-gray-600/70 transition-all"
-                  >
-                    <span className="truncate">{selectedAgent}</span>
-                    <ChevronDown size={10} className="flex-shrink-0" />
-                  </button>
-                  {showAgentDropdown && (
-                    <div className="absolute bottom-full mb-2 left-0 right-0 sm:right-auto bg-gray-800 border border-gray-600/50 rounded-lg shadow-lg z-10 min-w-[180px]">
-                      {['@Copiloto IA', '@Code Generator', '@Refactor Agent', '@Debug Agent', '@Test Agent'].map((agent) => (
-                        <button
-                          key={agent}
-                          onClick={() => {
-                            setSelectedAgent(agent);
-                            setShowAgentDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700/50 first:rounded-t-lg last:rounded-b-lg transition-all"
-                        >
-                          {agent}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Container da textarea com layout expandido */}
-              <div className="relative mb-2">
-                {/* Textarea expandida verticalmente */}
-                <textarea
-                  ref={textareaRef}
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Digite sua mensagem..."
-                  className="w-full bg-gray-700/70 border border-gray-600/70 rounded-lg pl-3 pr-3 pt-3 pb-14 text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent text-sm transition-all duration-200"
-                  style={{
-                    minHeight: '80px',
-                    maxHeight: '110px', // Reduzido para dar espaço ao menu
-                    overflowY: 'auto' // Permitir scroll quando necessário
-                  }}
-                  rows={3}
-                />
-                
-                {/* Rodapé com botões de ação e enviar - com background sólido */}
-                <div className="absolute bottom-0 left-0 right-0 bg-gray-700/70 border-t border-gray-600/50 rounded-b-lg px-3 py-2 flex items-center backdrop-blur-sm">
-                  {/* Botões de ação expandidos horizontalmente - responsivos */}
-                  <div className="flex-1 flex items-center space-x-0.5 overflow-x-auto mr-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleFileUpload}
-                      className="p-1 text-white hover:bg-gray-600/70 hover:text-white flex-shrink-0"
-                      title="Upload de arquivo"
-                    >
-                      <Upload size={10} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleImageUpload}
-                      className="p-1 text-white hover:bg-gray-600/70 hover:text-white flex-shrink-0 hidden xs:inline-flex"
-                      title="Upload de imagem"
-                    >
-                      <Image size={10} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleVoiceInput}
-                      className="p-1 text-white hover:bg-gray-600/70 hover:text-white flex-shrink-0 hidden xs:inline-flex"
-                      title="Entrada de voz"
-                    >
-                      <Mic size={10} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleAgentReference}
-                      className="p-1 text-white hover:bg-gray-600/70 hover:text-white flex-shrink-0 hidden sm:inline-flex"
-                      title="Referenciar agente (@)"
-                    >
-                      <AtSign size={10} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleProjectFileReference}
-                      className="p-1 text-white hover:bg-gray-600/70 hover:text-white flex-shrink-0 hidden sm:inline-flex"
-                      title="Referenciar arquivo do projeto (#)"
-                    >
-                      <Hash size={10} />
-                    </Button>
-                    {/* Botão de otimizar/voltar - condicional */}
-                    {!showBackButton ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handlePromptOptimization}
-                        className="p-1 text-white hover:bg-gray-600/70 hover:text-white flex-shrink-0 hidden md:inline-flex"
-                        title="Otimizar prompt com IA"
-                      >
-                        <Sparkles size={10} />
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleBackToOriginalPrompt}
-                        className="w-8 h-8 rounded-full p-0 text-white hover:bg-gray-600/70 hover:text-white flex-shrink-0 flex items-center justify-center"
-                        title="Voltar ao prompt original"
-                      >
-                        <ArrowLeft size={12} />
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {/* Botões de ação principais - ordem: [Envio de Voz] [Enviar] */}
-                  <div className="flex items-center space-x-1 ml-auto">
-                    {/* Botão de envio de voz */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleVoiceInput}
-                      className="p-1 text-white hover:bg-gray-600/70 hover:text-white flex-shrink-0"
-                      title="Envio de voz"
-                    >
-                      <Mic size={12} />
-                    </Button>
+              // Sempre salvar versão quando há alterações via copiloto (userPrompt existe)
+              if (userPrompt) {
+                try {
+                  // Se não há projectId, criar um ID temporário baseado no appConfig ou timestamp
+                  let currentProjectId = projectId;
+                  if (!currentProjectId) {
+                    currentProjectId = appConfig?.name 
+                      ? `temp_${appConfig.name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`
+                      : `temp_project_${Date.now()}`;
                     
-                    {/* Botão de enviar - na extremidade direita */}
-                    <Button
-                      onClick={handleSendMessage}
-                      disabled={!chatMessage.trim()}
-                      className="p-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-                      title="Enviar mensagem"
-                    >
-                      <Send size={12} />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+                    console.log('🆔 [IDE_PAGE] Criando ID temporário para projeto:', currentProjectId);
+                  }
+                  
+                  console.log('💾 [IDE_PAGE] Salvando versão automaticamente...', {
+                    projectId: currentProjectId,
+                    userPrompt: userPrompt.substring(0, 50) + '...',
+                    codeLength: newCode.length,
+                    hasAppConfig: !!appConfig,
+                    isTemporaryProject: !projectId
+                  });
+                  
+                  const versionId = await versioningService.saveVersionAutomatically(
+                    currentProjectId,
+                    userPrompt,
+                    newCode
+                  );
+                  
+                  console.log('✅ [IDE_PAGE] Versão salva automaticamente:', {
+                    versionId,
+                    projectId: currentProjectId,
+                    isTemporaryProject: !projectId
+                  });
+                  
+                } catch (error) {
+                  console.error('❌ [IDE_PAGE] Erro ao salvar versão automaticamente:', error);
+                  
+                  // Não bloquear a atualização do código em caso de erro no versionamento
+                }
+              } else {
+                console.log('⚠️ [IDE_PAGE] Versionamento não executado - sem userPrompt:', {
+                  hasProjectId: !!projectId,
+                  hasUserPrompt: !!userPrompt,
+                  hasAppConfig: !!appConfig
+                });
+              }
+              
+              // Aqui podemos adicionar lógica para atualizar o preview em tempo real
+            }}
+            onError={(error) => {
+              console.error('Erro no AICopilot:', error);
+              // Aqui podemos mostrar uma notificação de erro para o usuário
+            }}
+          />
         );
 
       case 'files':
@@ -1280,7 +1134,7 @@ Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
     switch (tabType) {
       case 'preview':
         return (
-          <div className="p-4 h-full bg-gray-900/50 flex flex-col pb-6">
+          <div className="p-4 pb-6 h-full bg-gray-900/50 flex flex-col overflow-hidden">
             {/* Controles do Preview */}
             <div className="flex items-center justify-between mb-4 p-3 bg-gray-800/50 rounded-lg">
               <div className="flex items-center space-x-4">
@@ -1360,7 +1214,7 @@ Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
             </div>
 
             {/* Preview do App */}
-            <div className="flex-1 flex items-start justify-center bg-gray-800/30 rounded-lg overflow-hidden p-2">
+            <div className="flex-1 flex items-start justify-center bg-gray-800/30 rounded-lg overflow-hidden p-2" style={{ height: 'calc(100% - 120px)' }}>
               <div 
                 className={getDeviceStyles()}
                 style={{ 
@@ -1479,12 +1333,12 @@ Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
   }
 
   return (
-    <div className="h-screen bg-gray-900 text-white overflow-hidden pb-6">
+    <div className="h-screen bg-gray-900 text-white overflow-hidden pb-4">
       {/* Layout principal */}
       <div className="flex h-full">
         {/* Painel esquerdo */}
         <div 
-          className="bg-gray-800/50 border-r border-gray-700/50 flex flex-col overflow-hidden"
+          className="bg-gray-800/50 border-r border-gray-700/50 flex flex-col overflow-hidden pb-2"
           style={{ width: `${leftPanelWidth}%` }}
         >
           {/* Abas horizontais */}
@@ -1596,7 +1450,7 @@ Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
         />
 
         {/* Painel direito */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden pb-2">
           {/* Seção Canvas */}
           <div 
             className="bg-gray-800/50 flex flex-col overflow-hidden flex-1"
@@ -1782,7 +1636,7 @@ Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
           </div>
 
           {/* Área do Preview em tela cheia */}
-          <div className="flex-1 bg-gray-900/50 p-4 overflow-auto custom-scrollbar">
+          <div className="flex-1 bg-gray-900/50 p-4 overflow-hidden" style={{ height: 'calc(100vh - 80px)' }}>
             <div className="flex items-center justify-center h-full">
               <div 
                 className={getDeviceStyles()}
@@ -1828,6 +1682,8 @@ Para dúvidas ou suporte, consulte a documentação do Canvas App Creator.
           </div>
         </div>
       )}
+
+
     </div>
   );
 };

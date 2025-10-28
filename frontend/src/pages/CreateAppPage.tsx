@@ -783,6 +783,13 @@ const WIZARD_STEPS = [
 ];
 
 const CreateAppPage: React.FC = () => {
+  // Adicionar classe CSS para permitir scroll na página Create
+  React.useEffect(() => {
+    document.body.classList.add('scrollable-page');
+    return () => {
+      document.body.classList.remove('scrollable-page');
+    };
+  }, []);
   const { success, error } = useToast();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
